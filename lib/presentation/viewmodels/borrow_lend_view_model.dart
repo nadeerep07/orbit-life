@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import '../../domain/entities/borrow_lend_transaction_entity.dart';
 import '../../domain/entities/borrow_lend_entity.dart';
 import '../../domain/repositories/borrow_lend_repository.dart';
 import '../../core/services/notification_service.dart';
 import 'accounts_view_model.dart';
+import 'package:uuid/uuid.dart';
 
 class BorrowLendViewModel extends ChangeNotifier {
   final BorrowLendRepository _repository;
@@ -85,6 +87,59 @@ class BorrowLendViewModel extends ChangeNotifier {
     }
 
     await NotificationService().cancelNotification(entry.id.hashCode.abs());
+    await loadEntries();
+  }
+
+  Future<void> updateEntry(BorrowLendEntity updatedEntry) async {
+    await _repository.updateBorrowLend(updatedEntry);
+    await loadEntries();
+  }
+
+  Future<void> addTransactionToEntry({
+    required BorrowLendEntity entry,
+    required double amountToPay,
+    required String accountIdToUpdate,
+    required DateTime date,
+  }) async {
+    final transactionType = entry.type == 'lent' ? 'received' : 'repaid';
+
+    final newTransaction = BorrowLendTransactionEntity(
+      id: const Uuid().v4(),
+      amount: amountToPay,
+      type: transactionType,
+      date: date,
+      accountId: accountIdToUpdate,
+    );
+
+    final updatedTransactions = List<BorrowLendTransactionEntity>.from(
+      entry.transactions,
+    )..add(newTransaction);
+
+    final totalPaidAfterTrx = updatedTransactions.fold(
+      0.0,
+      (sum, t) => sum + t.amount,
+    );
+    final newStatus = totalPaidAfterTrx >= entry.amount
+        ? 'completed'
+        : entry.status;
+
+    final updatedEntry = entry.copyWith(
+      transactions: updatedTransactions,
+      status: newStatus,
+    );
+
+    await _repository.updateBorrowLend(updatedEntry);
+
+    double amountChange = entry.type == 'lent' ? amountToPay : -amountToPay;
+    await _accountsViewModel.updateAccountBalance(
+      accountIdToUpdate,
+      amountChange,
+    );
+
+    if (newStatus == 'completed') {
+      await NotificationService().cancelNotification(entry.id.hashCode.abs());
+    }
+
     await loadEntries();
   }
 

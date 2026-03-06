@@ -26,13 +26,15 @@ class InvestmentModelAdapter extends TypeAdapter<InvestmentModel> {
       buyPrice: fields[6] as double?,
       date: fields[7] as DateTime,
       notes: fields[8] as String,
+      interestRate: fields[9] as double?,
+      accountId: fields[10] == null ? 'cash' : fields[10] as String,
     );
   }
 
   @override
   void write(BinaryWriter writer, InvestmentModel obj) {
     writer
-      ..writeByte(9)
+      ..writeByte(11)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
@@ -50,7 +52,11 @@ class InvestmentModelAdapter extends TypeAdapter<InvestmentModel> {
       ..writeByte(7)
       ..write(obj.date)
       ..writeByte(8)
-      ..write(obj.notes);
+      ..write(obj.notes)
+      ..writeByte(9)
+      ..write(obj.interestRate)
+      ..writeByte(10)
+      ..write(obj.accountId);
   }
 
   @override

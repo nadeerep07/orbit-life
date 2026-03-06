@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import '../../domain/entities/emi_tracker_entity.dart';
 import '../../domain/repositories/emi_tracker_repository.dart';
+import 'accounts_view_model.dart';
 
 class EmiTrackerViewModel extends ChangeNotifier {
   final EmiTrackerRepository _repository;
@@ -8,7 +9,9 @@ class EmiTrackerViewModel extends ChangeNotifier {
   List<EmiTrackerEntity> _emis = [];
   bool _isLoading = false;
 
-  EmiTrackerViewModel(this._repository);
+  final AccountsViewModel _accountsViewModel;
+
+  EmiTrackerViewModel(this._repository, this._accountsViewModel);
 
   List<EmiTrackerEntity> get emis => _emis;
   bool get isLoading => _isLoading;
@@ -26,6 +29,9 @@ class EmiTrackerViewModel extends ChangeNotifier {
   Future<void> addEmi(EmiTrackerEntity emi) async {
     await _repository.addEmi(emi);
     _emis.insert(0, emi);
+    // Note: We do NOT credit the account here.
+    // EMIs are liabilities, not income. The account is debited only when
+    // payments are made via markEmiPaid or markPayLaterPaid.
     notifyListeners();
   }
 
@@ -41,6 +47,7 @@ class EmiTrackerViewModel extends ChangeNotifier {
   Future<void> deleteEmi(String id) async {
     await _repository.deleteEmi(id);
     _emis.removeWhere((e) => e.id == id);
+    // No balance adjustment needed on delete since we don't credit on create.
     notifyListeners();
   }
 
@@ -61,8 +68,16 @@ class EmiTrackerViewModel extends ChangeNotifier {
           startDate: emi.startDate,
           notes: emi.notes,
           isPayLater: false,
+          accountId: emi
+              .accountId, // ✅ preserve accountId so payments appear in account history
         );
         await updateEmi(updated);
+
+        // Deduct EMI payment from account
+        await _accountsViewModel.updateAccountBalance(
+          emi.accountId,
+          -emi.monthlyEmi,
+        );
       }
     }
   }
@@ -83,8 +98,16 @@ class EmiTrackerViewModel extends ChangeNotifier {
           isPayLater: true,
           dueDate: emi.dueDate,
           isPaid: true,
+          accountId: emi
+              .accountId, // ✅ preserve accountId so payment appears in account history
         );
         await updateEmi(updated);
+
+        // Deduct settled amount from account
+        await _accountsViewModel.updateAccountBalance(
+          emi.accountId,
+          -emi.totalAmount,
+        );
       }
     }
   }

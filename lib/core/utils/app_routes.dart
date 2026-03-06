@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:my_budget_pro/presentation/screens/account_detail_screen.dart';
 import 'package:my_budget_pro/presentation/screens/accounts_screen.dart';
 import 'package:my_budget_pro/presentation/screens/add_expense_screen.dart';
 import 'package:my_budget_pro/presentation/screens/analytics_screen.dart';
@@ -26,12 +27,14 @@ import '../../presentation/screens/investments_screen.dart';
 import '../../presentation/screens/add_investment_screen.dart';
 import '../../presentation/screens/investment_detail_screen.dart';
 import '../../domain/entities/investment_entity.dart';
+import '../../domain/entities/account_entity.dart';
 
 class AppRoutes {
   static const String dashboard = '/';
   static const String addExpense = '/addExpense';
   static const String budget = '/budget';
   static const String accounts = '/accounts';
+  static const String accountDetail = '/accountDetail';
   static const String analytics = '/analytics';
   static const String setting = '/settings';
   static const String savings = '/savings';
@@ -67,6 +70,19 @@ class AppRoutes {
         return MaterialPageRoute(builder: (_) => const BudgetScreen());
       case accounts:
         return MaterialPageRoute(builder: (_) => const AccountsScreen());
+      case accountDetail:
+        final account = settings.arguments as AccountEntity?;
+        if (account == null) {
+          return MaterialPageRoute(
+            builder: (_) => Scaffold(
+              appBar: AppBar(title: const Text('Error')),
+              body: const Center(child: Text('Account not found')),
+            ),
+          );
+        }
+        return MaterialPageRoute(
+          builder: (_) => AccountDetailScreen(account: account),
+        );
       case analytics:
         return MaterialPageRoute(builder: (_) => const AnalyticsScreen());
       case savings:

@@ -59,7 +59,9 @@ class _TransferScreenState extends State<TransferScreen> {
                 children: [
                   TextField(
                     controller: _amountController,
-                    keyboardType: TextInputType.number,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
                     style: TextStyle(
                       fontSize: 32,
                       fontWeight: FontWeight.bold,

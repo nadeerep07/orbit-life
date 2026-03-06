@@ -10,6 +10,8 @@ class InvestmentEntity extends Equatable {
   final double? buyPrice;
   final DateTime date;
   final String notes;
+  final double? interestRate;
+  final String accountId;
 
   const InvestmentEntity({
     required this.id,
@@ -21,6 +23,8 @@ class InvestmentEntity extends Equatable {
     this.buyPrice,
     required this.date,
     this.notes = '',
+    this.interestRate,
+    this.accountId = 'cash',
   });
 
   @override
@@ -34,5 +38,19 @@ class InvestmentEntity extends Equatable {
     buyPrice,
     date,
     notes,
+    interestRate,
+    accountId,
   ];
+
+  double get calculatedCurrentValue {
+    if (type == 'fd' && interestRate != null) {
+      final days = DateTime.now().difference(date).inDays;
+      if (days > 0) {
+        final dailyInterest = (investedAmount * (interestRate! / 100)) / 365;
+        return investedAmount + (dailyInterest * days);
+      }
+      return investedAmount;
+    }
+    return currentValue;
+  }
 }

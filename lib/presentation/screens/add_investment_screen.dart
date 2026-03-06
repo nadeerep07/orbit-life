@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import 'package:uuid/uuid.dart';
 import '../theme/app_theme.dart';
 import '../viewmodels/investment_view_model.dart';
+import '../viewmodels/accounts_view_model.dart';
 import '../../domain/entities/investment_entity.dart';
 
 class AddInvestmentScreen extends StatefulWidget {
@@ -21,13 +22,21 @@ class _AddInvestmentScreenState extends State<AddInvestmentScreen> {
   final _quantityCtrl = TextEditingController();
   final _buyPriceCtrl = TextEditingController();
   final _noteCtrl = TextEditingController();
+  final _interestRateCtrl = TextEditingController();
 
   String _type = 'stock';
   DateTime _date = DateTime.now();
   bool _enableSipReminder = false;
+  String? _selectedAccountId;
 
   @override
   Widget build(BuildContext context) {
+    final accounts = context.watch<AccountsViewModel>().accounts;
+
+    if (_selectedAccountId == null && accounts.isNotEmpty) {
+      _selectedAccountId = accounts.first.id;
+    }
+
     return Scaffold(
       appBar: AppBar(title: const Text('Add Investment')),
       body: SafeArea(
@@ -52,8 +61,12 @@ class _AddInvestmentScreenState extends State<AddInvestmentScreen> {
                           child: Text('SIP / Mutual Funds'),
                         ),
                         DropdownMenuItem(
+                          value: 'fd',
+                          child: Text('Fixed Deposit (FD)'),
+                        ),
+                        DropdownMenuItem(
                           value: 'other',
-                          child: Text('Other (Gold, Crypto, FD)'),
+                          child: Text('Other (Gold, Crypto, etc)'),
                         ),
                       ],
                       onChanged: (val) {
@@ -75,22 +88,45 @@ class _AddInvestmentScreenState extends State<AddInvestmentScreen> {
                       decoration: const InputDecoration(
                         labelText: 'Total Invested Amount (₹)',
                       ),
-                      keyboardType: TextInputType.number,
-                      validator: (v) => v == null || double.tryParse(v) == null
-                          ? 'Invalid Amount'
-                          : null,
-                    ),
-                    const SizedBox(height: 12),
-                    TextFormField(
-                      controller: _currentValueCtrl,
-                      decoration: const InputDecoration(
-                        labelText: 'Current Value (₹)',
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
                       ),
-                      keyboardType: TextInputType.number,
                       validator: (v) => v == null || double.tryParse(v) == null
                           ? 'Invalid Amount'
                           : null,
                     ),
+                    if (_type != 'fd') ...[
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: _currentValueCtrl,
+                        decoration: const InputDecoration(
+                          labelText: 'Current Value (₹)',
+                        ),
+                        keyboardType: const TextInputType.numberWithOptions(
+                          decimal: true,
+                        ),
+                        validator: (v) =>
+                            v == null || double.tryParse(v) == null
+                            ? 'Invalid Amount'
+                            : null,
+                      ),
+                    ],
+                    if (_type == 'fd') ...[
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: _interestRateCtrl,
+                        decoration: const InputDecoration(
+                          labelText: 'Annual Interest Rate (%)',
+                        ),
+                        keyboardType: const TextInputType.numberWithOptions(
+                          decimal: true,
+                        ),
+                        validator: (v) =>
+                            v == null || double.tryParse(v) == null
+                            ? 'Invalid Rate'
+                            : null,
+                      ),
+                    ],
                     if (_type == 'stock') ...[
                       const SizedBox(height: 12),
                       Row(
@@ -117,6 +153,23 @@ class _AddInvestmentScreenState extends State<AddInvestmentScreen> {
                         ],
                       ),
                     ],
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<String>(
+                      decoration: const InputDecoration(
+                        labelText: 'Payment Method (Account)',
+                      ),
+                      initialValue: _selectedAccountId,
+                      items: accounts.map((acc) {
+                        return DropdownMenuItem(
+                          value: acc.id,
+                          child: Text(acc.name),
+                        );
+                      }).toList(),
+                      onChanged: (val) {
+                        setState(() => _selectedAccountId = val);
+                      },
+                      validator: (v) => v == null ? 'Select an account' : null,
+                    ),
                     if (_type == 'sip') ...[
                       const SizedBox(height: 12),
                       SwitchListTile(
@@ -176,21 +229,27 @@ class _AddInvestmentScreenState extends State<AddInvestmentScreen> {
   }
 
   void _save() {
-    if (_formKey.currentState!.validate()) {
+    if (_formKey.currentState!.validate() && _selectedAccountId != null) {
       final inv = InvestmentEntity(
         id: const Uuid().v4(),
         name: _nameCtrl.text.trim(),
         type: _type,
         investedAmount: double.parse(_investedAmountCtrl.text),
-        currentValue: double.parse(_currentValueCtrl.text),
+        currentValue: _type == 'fd'
+            ? double.parse(_investedAmountCtrl.text)
+            : double.parse(_currentValueCtrl.text),
         quantity: _quantityCtrl.text.isNotEmpty
             ? double.tryParse(_quantityCtrl.text)
             : null,
         buyPrice: _buyPriceCtrl.text.isNotEmpty
             ? double.tryParse(_buyPriceCtrl.text)
             : null,
+        interestRate: _type == 'fd' && _interestRateCtrl.text.isNotEmpty
+            ? double.tryParse(_interestRateCtrl.text)
+            : null,
         date: _date,
         notes: _noteCtrl.text.trim(),
+        accountId: _selectedAccountId!,
       );
 
       context.read<InvestmentViewModel>().addInvestment(

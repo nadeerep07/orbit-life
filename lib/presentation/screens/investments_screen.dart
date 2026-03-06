@@ -117,12 +117,13 @@ class _InvestmentsScreenState extends State<InvestmentsScreen> {
                   Row(
                     children: [
                       Icon(
-                        isProfit ? Icons.arrow_upward : Icons.arrow_downward,
-                        size: 16,
+                        isProfit ? Icons.trending_up : Icons.trending_down,
+                        size: 18,
                         color: isProfit
                             ? Colors.green
                             : Theme.of(context).colorScheme.error,
                       ),
+                      const SizedBox(width: 4),
                       Text(
                         '₹${profitLoss.abs().toStringAsFixed(0)}',
                         style: TextStyle(
@@ -199,7 +200,7 @@ class _InvestmentsScreenState extends State<InvestmentsScreen> {
               CircleAvatar(
                 backgroundColor: Theme.of(
                   context,
-                ).colorScheme.primary.withOpacity(0.1),
+                ).colorScheme.primary.withValues(alpha: 0.1),
                 child: Icon(
                   typeIcon,
                   color: Theme.of(context).colorScheme.primary,

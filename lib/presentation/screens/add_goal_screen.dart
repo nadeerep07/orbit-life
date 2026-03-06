@@ -54,7 +54,9 @@ class _AddGoalScreenState extends State<AddGoalScreen> {
                   const SizedBox(height: 16),
                   TextField(
                     controller: _amountController,
-                    keyboardType: TextInputType.number,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
                     decoration: const InputDecoration(
                       labelText: 'Target Amount (₹)',
                       hintText: '120000',
@@ -63,7 +65,9 @@ class _AddGoalScreenState extends State<AddGoalScreen> {
                   const SizedBox(height: 16),
                   TextField(
                     controller: _savingsController,
-                    keyboardType: TextInputType.number,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
                     decoration: const InputDecoration(
                       labelText: 'Current Savings (₹)',
                       hintText: '0',

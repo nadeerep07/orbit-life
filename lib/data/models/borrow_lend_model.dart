@@ -1,6 +1,6 @@
 import 'package:hive/hive.dart';
 import '../../domain/entities/borrow_lend_entity.dart';
-
+import 'borrow_lend_transaction_model.dart';
 part 'borrow_lend_model.g.dart';
 
 @HiveType(typeId: 14)
@@ -35,6 +35,9 @@ class BorrowLendModel extends HiveObject {
   @HiveField(9)
   final String accountId;
 
+  @HiveField(10, defaultValue: [])
+  final List<BorrowLendTransactionModel> transactions;
+
   BorrowLendModel({
     required this.id,
     required this.personName,
@@ -46,6 +49,7 @@ class BorrowLendModel extends HiveObject {
     this.note = '',
     required this.status,
     required this.accountId,
+    this.transactions = const [],
   });
 
   factory BorrowLendModel.fromEntity(BorrowLendEntity entity) {
@@ -60,6 +64,9 @@ class BorrowLendModel extends HiveObject {
       note: entity.note,
       status: entity.status,
       accountId: entity.accountId,
+      transactions: entity.transactions
+          .map((t) => BorrowLendTransactionModel.fromEntity(t))
+          .toList(),
     );
   }
 
@@ -75,6 +82,7 @@ class BorrowLendModel extends HiveObject {
       note: note,
       status: status,
       accountId: accountId,
+      transactions: transactions.map((t) => t.toEntity()).toList(),
     );
   }
 }

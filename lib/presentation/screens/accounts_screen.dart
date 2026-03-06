@@ -88,6 +88,11 @@ class AccountsScreen extends StatelessWidget {
           ),
           onPressed: () => _updateBalanceDialog(context, id),
         ),
+        onTap: () {
+          final accountsVM = context.read<AccountsViewModel>();
+          final account = accountsVM.accounts.firstWhere((a) => a.id == id);
+          Navigator.pushNamed(context, '/accountDetail', arguments: account);
+        },
       ),
     );
   }
@@ -100,7 +105,7 @@ class AccountsScreen extends StatelessWidget {
         title: const Text('Update Balance'),
         content: TextField(
           controller: ctrl,
-          keyboardType: TextInputType.number,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
           decoration: const InputDecoration(
             labelText: 'Amount to Add (can be negative)',
           ),

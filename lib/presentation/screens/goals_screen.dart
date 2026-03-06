@@ -282,7 +282,7 @@ class _GoalsScreenState extends State<GoalsScreen> {
 
         content: TextField(
           controller: ctrl,
-          keyboardType: TextInputType.number,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
           decoration: const InputDecoration(labelText: "Amount (₹)"),
         ),
 

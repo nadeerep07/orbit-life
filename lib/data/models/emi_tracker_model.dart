@@ -44,6 +44,9 @@ class EmiTrackerModel extends HiveObject {
   @HiveField(12, defaultValue: false)
   final bool isReminderEnabled;
 
+  @HiveField(13, defaultValue: 'cash')
+  final String accountId;
+
   EmiTrackerModel({
     required this.id,
     required this.title,
@@ -58,6 +61,7 @@ class EmiTrackerModel extends HiveObject {
     this.dueDate,
     this.isPaid = false,
     this.isReminderEnabled = false,
+    this.accountId = 'cash',
   });
 
   factory EmiTrackerModel.fromEntity(EmiTrackerEntity entity) {
@@ -75,6 +79,7 @@ class EmiTrackerModel extends HiveObject {
       dueDate: entity.dueDate,
       isPaid: entity.isPaid,
       isReminderEnabled: entity.isReminderEnabled,
+      accountId: entity.accountId,
     );
   }
 
@@ -93,6 +98,7 @@ class EmiTrackerModel extends HiveObject {
       dueDate: dueDate,
       isPaid: isPaid,
       isReminderEnabled: isReminderEnabled,
+      accountId: accountId,
     );
   }
 
@@ -111,6 +117,7 @@ class EmiTrackerModel extends HiveObject {
       'dueDate': dueDate?.toIso8601String(),
       'isPaid': isPaid,
       'isReminderEnabled': isReminderEnabled,
+      'accountId': accountId,
     };
   }
 }

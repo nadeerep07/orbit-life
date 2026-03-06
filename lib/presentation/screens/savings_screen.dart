@@ -174,7 +174,7 @@ class SavingsScreen extends StatelessWidget {
         title: const Text('Add Funds'),
         content: TextField(
           controller: ctrl,
-          keyboardType: TextInputType.number,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
           decoration: const InputDecoration(labelText: 'Amount (₹)'),
         ),
         actions: [

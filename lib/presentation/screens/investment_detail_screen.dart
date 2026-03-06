@@ -35,15 +35,17 @@ class _InvestmentDetailScreenState extends State<InvestmentDetailScreen> {
   Widget build(BuildContext context) {
     final inv = widget.investment;
 
-    final double profitLoss = inv.currentValue - inv.investedAmount;
+    final double profitLoss = inv.calculatedCurrentValue - inv.investedAmount;
     final bool isProfit = profitLoss >= 0;
-    final double profitPercent = (profitLoss / inv.investedAmount) * 100;
+    final double profitPercent = inv.investedAmount > 0
+        ? (profitLoss / inv.investedAmount) * 100
+        : 0;
 
     return Scaffold(
       appBar: AppBar(
         title: Text(inv.name),
         actions: [
-          if (!_isEditing)
+          if (!_isEditing && inv.type != 'fd')
             IconButton(
               icon: const Icon(Icons.edit),
               onPressed: () => setState(() => _isEditing = true),
@@ -127,7 +129,7 @@ class _InvestmentDetailScreenState extends State<InvestmentDetailScreen> {
             )
           else
             Text(
-              '₹${inv.currentValue.toStringAsFixed(0)}',
+              '₹${inv.calculatedCurrentValue.toStringAsFixed(0)}',
               style: const TextStyle(fontSize: 36, fontWeight: FontWeight.bold),
             ),
           const SizedBox(height: 16),
@@ -135,16 +137,16 @@ class _InvestmentDetailScreenState extends State<InvestmentDetailScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             decoration: BoxDecoration(
               color: isProfit
-                  ? Colors.green.withOpacity(0.1)
-                  : Theme.of(context).colorScheme.error.withOpacity(0.1),
+                  ? Colors.green.withValues(alpha: 0.1)
+                  : Theme.of(context).colorScheme.error.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(20),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
                 Icon(
-                  isProfit ? Icons.arrow_upward : Icons.arrow_downward,
-                  size: 16,
+                  isProfit ? Icons.trending_up : Icons.trending_down,
+                  size: 18,
                   color: isProfit
                       ? Colors.green
                       : Theme.of(context).colorScheme.error,
@@ -174,6 +176,11 @@ class _InvestmentDetailScreenState extends State<InvestmentDetailScreen> {
         children: [
           _buildDetailRow('Investment Name', inv.name),
           _buildDetailRow('Type', inv.type.toUpperCase()),
+          if (inv.type == 'fd' && inv.interestRate != null)
+            _buildDetailRow(
+              'Interest Rate',
+              '${inv.interestRate!.toStringAsFixed(2)}% p.a.',
+            ),
           _buildDetailRow(
             'Total Invested',
             '₹${inv.investedAmount.toStringAsFixed(2)}',

@@ -50,12 +50,26 @@ import 'data/repositories/emi_tracker_repository_impl.dart';
 import 'presentation/viewmodels/emi_tracker_view_model.dart';
 
 import 'data/models/borrow_lend_model.dart';
+import 'data/models/borrow_lend_transaction_model.dart';
 import 'data/repositories/borrow_lend_repository_impl.dart';
 import 'presentation/viewmodels/borrow_lend_view_model.dart';
+
+// import 'package:flutter/material.dart';
+// import 'package:provider/provider.dart';
+// import 'package:hive_flutter/hive_flutter.dart';
+// import 'package:flutter_dotenv/flutter_dotenv.dart';
+// import 'package:firebase_core/firebase_core.dart';
+
+// import 'core/services/notification_service.dart';
+import 'core/utils/data_fixer.dart';
+// import 'data/datasources/local_data_source.dart';
 
 import 'data/models/investment_model.dart';
 import 'data/repositories/investment_repository_impl.dart';
 import 'presentation/viewmodels/investment_view_model.dart';
+
+import 'data/repositories/transaction_repository_impl.dart';
+import 'presentation/viewmodels/account_detail_view_model.dart';
 
 import 'presentation/theme/light_theme.dart';
 import 'presentation/theme/dark_theme.dart';
@@ -86,6 +100,7 @@ void main() async {
   Hive.registerAdapter(MealEntryModelAdapter());
   Hive.registerAdapter(EmiTrackerModelAdapter());
   Hive.registerAdapter(BorrowLendModelAdapter());
+  Hive.registerAdapter(BorrowLendTransactionModelAdapter());
   Hive.registerAdapter(InvestmentModelAdapter());
   await Hive.openBox('settingsBox'); // Initialize settingsBox
 
@@ -108,6 +123,10 @@ void main() async {
   final emiTrackerRepository = EmiTrackerRepositoryImpl(localDataSource);
   final borrowLendRepository = BorrowLendRepositoryImpl(localDataSource);
   final investmentRepository = InvestmentRepositoryImpl(localDataSource);
+  final transactionRepository = TransactionRepositoryImpl(localDataSource);
+
+  // 🛠 Run one-time data fixes and balance resync
+  await DataFixer.runFixes(localDataSource, transactionRepository);
 
   runApp(
     MultiProvider(
@@ -178,8 +197,15 @@ void main() async {
         ChangeNotifierProvider(
           create: (_) => DietViewModel(dietRepository)..loadDietData(),
         ),
-        ChangeNotifierProvider(
-          create: (_) => EmiTrackerViewModel(emiTrackerRepository)..loadEmis(),
+        ChangeNotifierProxyProvider<AccountsViewModel, EmiTrackerViewModel>(
+          create: (context) => EmiTrackerViewModel(
+            emiTrackerRepository,
+            context.read<AccountsViewModel>(),
+          )..loadEmis(),
+          update: (context, accountsVM, previous) =>
+              (previous ??
+                    EmiTrackerViewModel(emiTrackerRepository, accountsVM))
+                ..loadEmis(),
         ),
         ChangeNotifierProxyProvider<AccountsViewModel, BorrowLendViewModel>(
           create: (context) => BorrowLendViewModel(
@@ -191,9 +217,19 @@ void main() async {
                     BorrowLendViewModel(borrowLendRepository, accountsVM))
                 ..loadEntries(),
         ),
+        ChangeNotifierProxyProvider<AccountsViewModel, InvestmentViewModel>(
+          create: (context) => InvestmentViewModel(
+            investmentRepository,
+            context.read<AccountsViewModel>(),
+          )..loadInvestments(),
+          update: (context, accountsVM, previous) =>
+              (previous ??
+                    InvestmentViewModel(investmentRepository, accountsVM))
+                ..loadInvestments(),
+        ),
         ChangeNotifierProvider(
           create: (_) =>
-              InvestmentViewModel(investmentRepository)..loadInvestments(),
+              AccountDetailViewModel(repository: transactionRepository),
         ),
       ],
       child: const AppLockWrapper(child: MyBudgetApp()),

@@ -78,7 +78,9 @@ class _ServiceTrackerScreenState extends State<ServiceTrackerScreen> {
                   const SizedBox(height: 16),
                   TextField(
                     controller: _mileageController,
-                    keyboardType: TextInputType.number,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
                     decoration: const InputDecoration(
                       labelText: 'Current Odometer (KM)',
                       hintText: '10050',
@@ -87,7 +89,9 @@ class _ServiceTrackerScreenState extends State<ServiceTrackerScreen> {
                   const SizedBox(height: 16),
                   TextField(
                     controller: _costController,
-                    keyboardType: TextInputType.number,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
                     decoration: const InputDecoration(
                       labelText: 'Total Cost (₹)',
                       hintText: '4500',
@@ -174,7 +178,9 @@ class _ServiceTrackerScreenState extends State<ServiceTrackerScreen> {
                   const Divider(),
                   TextField(
                     controller: _nextMileageController,
-                    keyboardType: TextInputType.number,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
                     decoration: const InputDecoration(
                       labelText: 'Next Service Due (Odometer KM)',
                       hintText: '15000',

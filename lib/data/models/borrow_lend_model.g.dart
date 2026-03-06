@@ -27,13 +27,16 @@ class BorrowLendModelAdapter extends TypeAdapter<BorrowLendModel> {
       note: fields[7] as String,
       status: fields[8] as String,
       accountId: fields[9] as String,
+      transactions: fields[10] == null
+          ? []
+          : (fields[10] as List).cast<BorrowLendTransactionModel>(),
     );
   }
 
   @override
   void write(BinaryWriter writer, BorrowLendModel obj) {
     writer
-      ..writeByte(10)
+      ..writeByte(11)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
@@ -53,7 +56,9 @@ class BorrowLendModelAdapter extends TypeAdapter<BorrowLendModel> {
       ..writeByte(8)
       ..write(obj.status)
       ..writeByte(9)
-      ..write(obj.accountId);
+      ..write(obj.accountId)
+      ..writeByte(10)
+      ..write(obj.transactions);
   }
 
   @override

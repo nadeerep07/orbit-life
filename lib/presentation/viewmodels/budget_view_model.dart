@@ -80,7 +80,7 @@ class BudgetViewModel extends ChangeNotifier {
           const CategoryEntity(
             id: 'others',
             name: 'Others',
-            monthlyBudget: 3000,
+            monthlyBudget: 1000,
             isCustom: false,
           ),
         ];

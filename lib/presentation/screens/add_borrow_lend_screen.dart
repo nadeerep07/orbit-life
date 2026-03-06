@@ -8,7 +8,9 @@ import '../viewmodels/accounts_view_model.dart';
 import '../../domain/entities/borrow_lend_entity.dart';
 
 class AddBorrowLendScreen extends StatefulWidget {
-  const AddBorrowLendScreen({super.key});
+  final BorrowLendEntity? editEntry;
+
+  const AddBorrowLendScreen({super.key, this.editEntry});
 
   @override
   State<AddBorrowLendScreen> createState() => _AddBorrowLendScreenState();
@@ -27,6 +29,21 @@ class _AddBorrowLendScreenState extends State<AddBorrowLendScreen> {
   String? _selectedAccountId;
 
   @override
+  void initState() {
+    super.initState();
+    if (widget.editEntry != null) {
+      _nameCtrl.text = widget.editEntry!.personName;
+      _phoneCtrl.text = widget.editEntry!.phoneNumber;
+      _amountCtrl.text = widget.editEntry!.amount.toString();
+      _noteCtrl.text = widget.editEntry!.note;
+      _type = widget.editEntry!.type;
+      _date = widget.editEntry!.date;
+      _dueDate = widget.editEntry!.dueDate;
+      _selectedAccountId = widget.editEntry!.accountId;
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     final accounts = context.watch<AccountsViewModel>().accounts;
 
@@ -35,7 +52,9 @@ class _AddBorrowLendScreenState extends State<AddBorrowLendScreen> {
     }
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Add Entry')),
+      appBar: AppBar(
+        title: Text(widget.editEntry == null ? 'Add Entry' : 'Edit Entry'),
+      ),
       body: SafeArea(
         child: Form(
           key: _formKey,
@@ -98,7 +117,9 @@ class _AddBorrowLendScreenState extends State<AddBorrowLendScreen> {
                       decoration: const InputDecoration(
                         labelText: 'Amount (₹)',
                       ),
-                      keyboardType: TextInputType.number,
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
                       validator: (v) => v == null || double.tryParse(v) == null
                           ? 'Invalid Amount'
                           : null,
@@ -196,20 +217,34 @@ class _AddBorrowLendScreenState extends State<AddBorrowLendScreen> {
 
   void _save() {
     if (_formKey.currentState!.validate() && _selectedAccountId != null) {
-      final entry = BorrowLendEntity(
-        id: const Uuid().v4(),
-        personName: _nameCtrl.text.trim(),
-        phoneNumber: _phoneCtrl.text.trim(),
-        amount: double.parse(_amountCtrl.text),
-        type: _type,
-        date: _date,
-        dueDate: _dueDate,
-        note: _noteCtrl.text.trim(),
-        status: 'pending',
-        accountId: _selectedAccountId!,
-      );
+      if (widget.editEntry == null) {
+        final entry = BorrowLendEntity(
+          id: const Uuid().v4(),
+          personName: _nameCtrl.text.trim(),
+          phoneNumber: _phoneCtrl.text.trim(),
+          amount: double.parse(_amountCtrl.text),
+          type: _type,
+          date: _date,
+          dueDate: _dueDate,
+          note: _noteCtrl.text.trim(),
+          status: 'pending',
+          accountId: _selectedAccountId!,
+        );
+        context.read<BorrowLendViewModel>().addEntry(entry);
+      } else {
+        final entry = widget.editEntry!.copyWith(
+          personName: _nameCtrl.text.trim(),
+          phoneNumber: _phoneCtrl.text.trim(),
+          amount: double.parse(_amountCtrl.text),
+          type: _type,
+          date: _date,
+          dueDate: _dueDate,
+          note: _noteCtrl.text.trim(),
+          accountId: _selectedAccountId!,
+        );
+        context.read<BorrowLendViewModel>().updateEntry(entry);
+      }
 
-      context.read<BorrowLendViewModel>().addEntry(entry);
       Navigator.pop(context);
     }
   }

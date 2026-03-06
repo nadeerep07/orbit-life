@@ -34,7 +34,7 @@ class DashboardScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
-        title: const Text('MyBudgetPro'),
+        title: const Text('OrbitLife'),
         actions: [
           IconButton(
             icon: const Icon(Icons.calendar_month),

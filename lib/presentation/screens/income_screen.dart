@@ -181,7 +181,7 @@ class _IncomeScreenState extends State<IncomeScreen> {
                             leading: CircleAvatar(
                               backgroundColor: Colors.greenAccent.shade100,
                               child: const Icon(
-                                Icons.arrow_downward,
+                                Icons.trending_up,
                                 color: Colors.green,
                               ),
                             ),
@@ -317,7 +317,9 @@ class _AddIncomeSheetState extends State<_AddIncomeSheet> {
             // Amount
             TextField(
               controller: _amountController,
-              keyboardType: TextInputType.number,
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
               decoration: InputDecoration(
                 labelText: 'Amount (₹)',
                 border: const OutlineInputBorder(

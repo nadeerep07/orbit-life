@@ -30,13 +30,14 @@ class EmiTrackerModelAdapter extends TypeAdapter<EmiTrackerModel> {
       dueDate: fields[10] as DateTime?,
       isPaid: fields[11] == null ? false : fields[11] as bool,
       isReminderEnabled: fields[12] == null ? false : fields[12] as bool,
+      accountId: fields[13] == null ? 'cash' : fields[13] as String,
     );
   }
 
   @override
   void write(BinaryWriter writer, EmiTrackerModel obj) {
     writer
-      ..writeByte(13)
+      ..writeByte(14)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
@@ -62,7 +63,9 @@ class EmiTrackerModelAdapter extends TypeAdapter<EmiTrackerModel> {
       ..writeByte(11)
       ..write(obj.isPaid)
       ..writeByte(12)
-      ..write(obj.isReminderEnabled);
+      ..write(obj.isReminderEnabled)
+      ..writeByte(13)
+      ..write(obj.accountId);
   }
 
   @override

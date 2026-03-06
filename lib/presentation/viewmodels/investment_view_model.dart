@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../domain/entities/investment_entity.dart';
 import '../../domain/repositories/investment_repository.dart';
 import '../../core/services/notification_service.dart';
+import 'accounts_view_model.dart';
 
 class InvestmentViewModel extends ChangeNotifier {
   final InvestmentRepository _repository;
@@ -12,7 +13,9 @@ class InvestmentViewModel extends ChangeNotifier {
   bool _isLoading = false;
   bool get isLoading => _isLoading;
 
-  InvestmentViewModel(this._repository);
+  final AccountsViewModel _accountsViewModel;
+
+  InvestmentViewModel(this._repository, this._accountsViewModel);
 
   Future<void> loadInvestments() async {
     _isLoading = true;
@@ -35,6 +38,12 @@ class InvestmentViewModel extends ChangeNotifier {
       await _scheduleSipReminder(investment);
     }
 
+    // Deduct invested amount from the selected account
+    await _accountsViewModel.updateAccountBalance(
+      investment.accountId,
+      -investment.investedAmount,
+    );
+
     await loadInvestments();
   }
 
@@ -44,7 +53,15 @@ class InvestmentViewModel extends ChangeNotifier {
   }
 
   Future<void> deleteInvestment(String id) async {
+    final investment = _investments.firstWhere((inv) => inv.id == id);
     await _repository.deleteInvestment(id);
+
+    // Refund invested amount to the account
+    await _accountsViewModel.updateAccountBalance(
+      investment.accountId,
+      investment.investedAmount,
+    );
+
     await NotificationService().cancelNotification(id.hashCode.abs());
     await loadInvestments();
   }
@@ -54,7 +71,10 @@ class InvestmentViewModel extends ChangeNotifier {
   }
 
   double get currentPortfolioValue {
-    return _investments.fold(0.0, (sum, inv) => sum + inv.currentValue);
+    return _investments.fold(
+      0.0,
+      (sum, inv) => sum + inv.calculatedCurrentValue,
+    );
   }
 
   double get totalProfitLoss {

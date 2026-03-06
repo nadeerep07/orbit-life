@@ -191,7 +191,9 @@ class BudgetScreen extends StatelessWidget {
             TextField(
               controller: budgetCtrl,
               decoration: const InputDecoration(labelText: 'Monthly Budget'),
-              keyboardType: TextInputType.number,
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
             ),
           ],
         ),
@@ -244,7 +246,9 @@ class BudgetScreen extends StatelessWidget {
             TextField(
               controller: budgetCtrl,
               decoration: const InputDecoration(labelText: 'Monthly Budget'),
-              keyboardType: TextInputType.number,
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
             ),
           ],
         ),
@@ -257,8 +261,8 @@ class BudgetScreen extends StatelessWidget {
             onPressed: () {
               final budget = double.tryParse(budgetCtrl.text);
               if (nameCtrl.text.isNotEmpty && budget != null) {
-                final updatedCat = cat.toEntity().copyWith(
-                  // Re-create with new values. We will define copyWith in Entity later if needed. But for simple update, we can just instantiate a new one and preserve ID.
+                final updatedCat = cat.copyWith(
+                  // Re-create with new values while preserving ID.
                   name: nameCtrl.text,
                   monthlyBudget: budget,
                 );

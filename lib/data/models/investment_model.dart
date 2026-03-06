@@ -32,6 +32,12 @@ class InvestmentModel extends HiveObject {
   @HiveField(8)
   final String notes;
 
+  @HiveField(9, defaultValue: null)
+  final double? interestRate;
+
+  @HiveField(10, defaultValue: 'cash')
+  final String accountId;
+
   InvestmentModel({
     required this.id,
     required this.name,
@@ -42,6 +48,8 @@ class InvestmentModel extends HiveObject {
     this.buyPrice,
     required this.date,
     this.notes = '',
+    this.interestRate,
+    this.accountId = 'cash',
   });
 
   factory InvestmentModel.fromEntity(InvestmentEntity entity) {
@@ -55,6 +63,8 @@ class InvestmentModel extends HiveObject {
       buyPrice: entity.buyPrice,
       date: entity.date,
       notes: entity.notes,
+      interestRate: entity.interestRate,
+      accountId: entity.accountId,
     );
   }
 
@@ -69,6 +79,8 @@ class InvestmentModel extends HiveObject {
       buyPrice: buyPrice,
       date: date,
       notes: notes,
+      interestRate: interestRate,
+      accountId: accountId,
     );
   }
 }
