@@ -17,7 +17,7 @@ class AIService {
     // Validate bounds
     final income = totalIncome < 0 ? 0.0 : totalIncome;
     final expenses = totalExpenses < 0 ? 0.0 : totalExpenses;
-    final now = DateTime.now();
+    // final now = DateTime.now();
 
     final prompt = _buildPrompt(
       income,

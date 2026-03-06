@@ -96,7 +96,7 @@ class _TransferScreenState extends State<TransferScreen> {
                     decoration: const InputDecoration(
                       labelText: 'From Account',
                     ),
-                    value: _fromAccount,
+                    initialValue: _fromAccount,
                     items: allOptions.map((opt) {
                       return DropdownMenuItem(
                         value: opt['id'],
@@ -137,7 +137,7 @@ class _TransferScreenState extends State<TransferScreen> {
                   const SizedBox(height: 16),
                   DropdownButtonFormField<String>(
                     decoration: const InputDecoration(labelText: 'To Account'),
-                    value: _toAccount,
+                    initialValue: _toAccount,
                     items: allOptions.map((opt) {
                       return DropdownMenuItem(
                         value: opt['id'],

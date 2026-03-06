@@ -18,6 +18,15 @@ import 'package:my_budget_pro/presentation/screens/services_history_screen.dart'
 import 'package:my_budget_pro/presentation/screens/diet_dashboard_screen.dart';
 import '../../presentation/screens/dashboard_screen.dart';
 
+import '../../presentation/screens/borrow_lend_screen.dart';
+import '../../presentation/screens/add_borrow_lend_screen.dart';
+import '../../presentation/screens/borrow_lend_detail_screen.dart';
+
+import '../../presentation/screens/investments_screen.dart';
+import '../../presentation/screens/add_investment_screen.dart';
+import '../../presentation/screens/investment_detail_screen.dart';
+import '../../domain/entities/investment_entity.dart';
+
 class AppRoutes {
   static const String dashboard = '/';
   static const String addExpense = '/addExpense';
@@ -37,6 +46,14 @@ class AppRoutes {
   static const String serviceTracker = '/serviceTracker';
   static const String serviceHistory = '/serviceHistory';
   static const String dietDashboard = '/dietDashboard';
+
+  static const String borrowLend = '/borrowLend';
+  static const String addBorrowLend = '/addBorrowLend';
+  static const String borrowLendDetail = '/borrowLendDetail';
+
+  static const String investments = '/investments';
+  static const String addInvestment = '/addInvestment';
+  static const String investmentDetail = '/investmentDetail';
 
   static Route<dynamic>? onGenerateRoute(RouteSettings settings) {
     switch (settings.name) {
@@ -76,6 +93,40 @@ class AppRoutes {
         return MaterialPageRoute(builder: (_) => const ServicesHistoryScreen());
       case dietDashboard:
         return MaterialPageRoute(builder: (_) => const DietDashboardScreen());
+
+      // Borrow & Lend
+      case borrowLend:
+        return MaterialPageRoute(builder: (_) => const BorrowLendScreen());
+      case addBorrowLend:
+        return MaterialPageRoute(builder: (_) => const AddBorrowLendScreen());
+      case borrowLendDetail:
+        final args = settings.arguments as Map<String, dynamic>? ?? {};
+        return MaterialPageRoute(
+          builder: (_) => BorrowLendDetailScreen(
+            personName: args['personName'] ?? '',
+            phoneNumber: args['phoneNumber'] ?? '',
+          ),
+        );
+
+      // Investments
+      case investments:
+        return MaterialPageRoute(builder: (_) => const InvestmentsScreen());
+      case addInvestment:
+        return MaterialPageRoute(builder: (_) => const AddInvestmentScreen());
+      case investmentDetail:
+        final investment = settings.arguments as InvestmentEntity?;
+        if (investment == null) {
+          return MaterialPageRoute(
+            builder: (_) => Scaffold(
+              appBar: AppBar(title: const Text('Error')),
+              body: const Center(child: Text('Investment details not found')),
+            ),
+          );
+        }
+        return MaterialPageRoute(
+          builder: (_) => InvestmentDetailScreen(investment: investment),
+        );
+
       default:
         return MaterialPageRoute(
           builder: (_) => Scaffold(

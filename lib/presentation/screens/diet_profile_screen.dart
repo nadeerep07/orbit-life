@@ -131,7 +131,7 @@ class _DietProfileScreenState extends State<DietProfileScreen> {
                   ),
                   const SizedBox(height: 16),
                   DropdownButtonFormField<String>(
-                    value: _activityLevel,
+                    initialValue: _activityLevel,
                     decoration: const InputDecoration(
                       labelText: 'Activity Level',
                     ),
@@ -142,7 +142,7 @@ class _DietProfileScreenState extends State<DietProfileScreen> {
                   ),
                   const SizedBox(height: 16),
                   DropdownButtonFormField<String>(
-                    value: _goal,
+                    initialValue: _goal,
                     decoration: const InputDecoration(labelText: 'Target Goal'),
                     items: _goals.map((g) {
                       return DropdownMenuItem(value: g, child: Text(g));

@@ -277,6 +277,18 @@ class DashboardScreen extends StatelessWidget {
             Icons.restaurant_menu,
             AppRoutes.dietDashboard,
           ),
+          _buildActionCard(
+            context,
+            'Borrow & Lend',
+            Icons.handshake_outlined,
+            AppRoutes.borrowLend,
+          ),
+          _buildActionCard(
+            context,
+            'Investments',
+            Icons.trending_up,
+            AppRoutes.investments,
+          ),
         ],
       ),
     );

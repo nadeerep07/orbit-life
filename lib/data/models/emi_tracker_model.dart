@@ -14,16 +14,16 @@ class EmiTrackerModel extends HiveObject {
   @HiveField(2)
   final String provider;
 
-  @HiveField(3)
+  @HiveField(3, defaultValue: 0.0)
   final double totalAmount;
 
-  @HiveField(4)
+  @HiveField(4, defaultValue: 0.0)
   final double monthlyEmi;
 
-  @HiveField(5)
+  @HiveField(5, defaultValue: 0)
   final int totalMonths;
 
-  @HiveField(6)
+  @HiveField(6, defaultValue: 0)
   final int paidMonths;
 
   @HiveField(7)
@@ -32,16 +32,16 @@ class EmiTrackerModel extends HiveObject {
   @HiveField(8)
   final String notes;
 
-  @HiveField(9)
+  @HiveField(9, defaultValue: false)
   final bool isPayLater;
 
   @HiveField(10)
   final DateTime? dueDate;
 
-  @HiveField(11)
+  @HiveField(11, defaultValue: false)
   final bool isPaid;
 
-  @HiveField(12)
+  @HiveField(12, defaultValue: false)
   final bool isReminderEnabled;
 
   EmiTrackerModel({

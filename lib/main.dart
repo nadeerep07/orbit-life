@@ -49,6 +49,14 @@ import 'data/models/emi_tracker_model.dart';
 import 'data/repositories/emi_tracker_repository_impl.dart';
 import 'presentation/viewmodels/emi_tracker_view_model.dart';
 
+import 'data/models/borrow_lend_model.dart';
+import 'data/repositories/borrow_lend_repository_impl.dart';
+import 'presentation/viewmodels/borrow_lend_view_model.dart';
+
+import 'data/models/investment_model.dart';
+import 'data/repositories/investment_repository_impl.dart';
+import 'presentation/viewmodels/investment_view_model.dart';
+
 import 'presentation/theme/light_theme.dart';
 import 'presentation/theme/dark_theme.dart';
 
@@ -77,6 +85,8 @@ void main() async {
   Hive.registerAdapter(DietProfileModelAdapter());
   Hive.registerAdapter(MealEntryModelAdapter());
   Hive.registerAdapter(EmiTrackerModelAdapter());
+  Hive.registerAdapter(BorrowLendModelAdapter());
+  Hive.registerAdapter(InvestmentModelAdapter());
   await Hive.openBox('settingsBox'); // Initialize settingsBox
 
   // Data Sources & Repositories
@@ -96,6 +106,8 @@ void main() async {
   final serviceRepository = ServiceRepositoryImpl(localDataSource);
   final dietRepository = DietRepositoryImpl(localDataSource);
   final emiTrackerRepository = EmiTrackerRepositoryImpl(localDataSource);
+  final borrowLendRepository = BorrowLendRepositoryImpl(localDataSource);
+  final investmentRepository = InvestmentRepositoryImpl(localDataSource);
 
   runApp(
     MultiProvider(
@@ -168,6 +180,20 @@ void main() async {
         ),
         ChangeNotifierProvider(
           create: (_) => EmiTrackerViewModel(emiTrackerRepository)..loadEmis(),
+        ),
+        ChangeNotifierProxyProvider<AccountsViewModel, BorrowLendViewModel>(
+          create: (context) => BorrowLendViewModel(
+            borrowLendRepository,
+            context.read<AccountsViewModel>(),
+          )..loadEntries(),
+          update: (context, accountsVM, previous) =>
+              (previous ??
+                    BorrowLendViewModel(borrowLendRepository, accountsVM))
+                ..loadEntries(),
+        ),
+        ChangeNotifierProvider(
+          create: (_) =>
+              InvestmentViewModel(investmentRepository)..loadInvestments(),
         ),
       ],
       child: const AppLockWrapper(child: MyBudgetApp()),

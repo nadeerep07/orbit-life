@@ -10,6 +10,8 @@ import '../models/goal_model.dart';
 import '../models/service_model.dart';
 import '../models/diet_model.dart';
 import '../models/emi_tracker_model.dart';
+import '../models/borrow_lend_model.dart';
+import '../models/investment_model.dart';
 
 abstract class LocalDataSource {
   Future<void> init();
@@ -78,6 +80,18 @@ abstract class LocalDataSource {
   Future<void> addEmi(EmiTrackerModel emi);
   Future<void> updateEmi(EmiTrackerModel emi);
   Future<void> deleteEmi(String id);
+
+  // Borrow & Lend
+  Future<List<BorrowLendModel>> getBorrowLends();
+  Future<void> addBorrowLend(BorrowLendModel borrowLend);
+  Future<void> updateBorrowLend(BorrowLendModel borrowLend);
+  Future<void> deleteBorrowLend(String id);
+
+  // Investments
+  Future<List<InvestmentModel>> getInvestments();
+  Future<void> addInvestment(InvestmentModel investment);
+  Future<void> updateInvestment(InvestmentModel investment);
+  Future<void> deleteInvestment(String id);
 }
 
 class HiveDataSourceImpl implements LocalDataSource {
@@ -93,6 +107,8 @@ class HiveDataSourceImpl implements LocalDataSource {
   late Box<DietProfileModel> _dietProfileBox;
   late Box<MealEntryModel> _mealEntryBox;
   late Box<EmiTrackerModel> _emiTrackerBox;
+  late Box<BorrowLendModel> _borrowLendBox;
+  late Box<InvestmentModel> _investmentBox;
 
   @override
   Future<void> init() async {
@@ -108,6 +124,8 @@ class HiveDataSourceImpl implements LocalDataSource {
     _dietProfileBox = await Hive.openBox<DietProfileModel>('dietProfileBox');
     _mealEntryBox = await Hive.openBox<MealEntryModel>('mealEntryBox');
     _emiTrackerBox = await Hive.openBox<EmiTrackerModel>('emiTrackerBox');
+    _borrowLendBox = await Hive.openBox<BorrowLendModel>('borrowLendBox');
+    _investmentBox = await Hive.openBox<InvestmentModel>('investmentBox');
 
     // Initialize default categories if box is empty
     await _migrateLegacyCategories();
@@ -483,5 +501,49 @@ class HiveDataSourceImpl implements LocalDataSource {
   @override
   Future<void> deleteEmi(String id) async {
     await _emiTrackerBox.delete(id);
+  }
+
+  // --- Borrow & Lend ---
+  @override
+  Future<List<BorrowLendModel>> getBorrowLends() async {
+    return _borrowLendBox.values.toList()
+      ..sort((a, b) => b.date.compareTo(a.date));
+  }
+
+  @override
+  Future<void> addBorrowLend(BorrowLendModel borrowLend) async {
+    await _borrowLendBox.put(borrowLend.id, borrowLend);
+  }
+
+  @override
+  Future<void> updateBorrowLend(BorrowLendModel borrowLend) async {
+    await _borrowLendBox.put(borrowLend.id, borrowLend);
+  }
+
+  @override
+  Future<void> deleteBorrowLend(String id) async {
+    await _borrowLendBox.delete(id);
+  }
+
+  // --- Investments ---
+  @override
+  Future<List<InvestmentModel>> getInvestments() async {
+    return _investmentBox.values.toList()
+      ..sort((a, b) => b.date.compareTo(a.date));
+  }
+
+  @override
+  Future<void> addInvestment(InvestmentModel investment) async {
+    await _investmentBox.put(investment.id, investment);
+  }
+
+  @override
+  Future<void> updateInvestment(InvestmentModel investment) async {
+    await _investmentBox.put(investment.id, investment);
+  }
+
+  @override
+  Future<void> deleteInvestment(String id) async {
+    await _investmentBox.delete(id);
   }
 }
