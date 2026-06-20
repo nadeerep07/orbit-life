@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import '../../domain/entities/expense_entity.dart';
+import '../../domain/entities/transaction_entity.dart';
 import '../../domain/repositories/expense_repository.dart';
+import '../../domain/repositories/transaction_repository.dart';
 
 class ExpenseViewModel extends ChangeNotifier {
   final ExpenseRepository _expenseRepository;
+  final TransactionRepository _transactionRepository;
 
   List<ExpenseEntity> _expenses = [];
   List<ExpenseEntity> get expenses => _expenses;
@@ -11,7 +14,7 @@ class ExpenseViewModel extends ChangeNotifier {
   bool _isLoading = false;
   bool get isLoading => _isLoading;
 
-  ExpenseViewModel(this._expenseRepository);
+  ExpenseViewModel(this._expenseRepository, this._transactionRepository);
 
   Future<void> loadExpenses() async {
     _isLoading = true;
@@ -26,16 +29,43 @@ class ExpenseViewModel extends ChangeNotifier {
 
   Future<void> addExpense(ExpenseEntity expense) async {
     await _expenseRepository.addExpense(expense);
+
+    final tx = TransactionEntity(
+      id: expense.id,
+      amount: expense.amount,
+      type: TransactionType.expense,
+      accountId: expense.accountId,
+      categoryOrSource: 'Expense',
+      date: expense.date,
+      description: expense.description,
+      referenceId: expense.id,
+    );
+    await _transactionRepository.addTransaction(tx);
+
     await loadExpenses();
   }
 
   Future<void> updateExpense(ExpenseEntity expense) async {
     await _expenseRepository.updateExpense(expense);
+
+    final tx = TransactionEntity(
+      id: expense.id,
+      amount: expense.amount,
+      type: TransactionType.expense,
+      accountId: expense.accountId,
+      categoryOrSource: 'Expense',
+      date: expense.date,
+      description: expense.description,
+      referenceId: expense.id,
+    );
+    await _transactionRepository.updateTransaction(tx);
+
     await loadExpenses();
   }
 
   Future<void> deleteExpense(String id) async {
     await _expenseRepository.deleteExpense(id);
+    await _transactionRepository.deleteTransaction(id);
     await loadExpenses();
   }
 

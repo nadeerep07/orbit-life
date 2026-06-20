@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../../domain/entities/service_entity.dart';
+import '../../domain/repositories/transaction_repository.dart';
 import '../theme/app_theme.dart';
 import '../viewmodels/service_view_model.dart';
+import '../viewmodels/accounts_view_model.dart';
 import 'services_history_screen.dart';
 
 class ServiceTrackerScreen extends StatefulWidget {
@@ -23,6 +25,7 @@ class _ServiceTrackerScreenState extends State<ServiceTrackerScreen> {
 
   DateTime _serviceDate = DateTime.now();
   DateTime? _nextServiceDate;
+  String? _selectedAccountId;
 
   @override
   void initState() {
@@ -39,10 +42,33 @@ class _ServiceTrackerScreenState extends State<ServiceTrackerScreen> {
         _nextMileageController.text = s.nextServiceMileage.toString();
       }
     }
+
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final accountsVM = context.read<AccountsViewModel>();
+      if (accountsVM.accounts.isNotEmpty) {
+        setState(() {
+          _selectedAccountId = accountsVM.accounts.first.id;
+        });
+      }
+
+      if (widget.existingService != null) {
+        final txRepo = context.read<TransactionRepository>();
+        final serviceTxs = (await txRepo.getAllTransactions())
+            .where((t) => t.referenceId == widget.existingService!.id)
+            .toList();
+        if (serviceTxs.isNotEmpty) {
+          setState(() {
+            _selectedAccountId = serviceTxs.first.accountId;
+          });
+        }
+      }
+    });
   }
 
   @override
   Widget build(BuildContext context) {
+    final accountsVM = context.watch<AccountsViewModel>();
+
     return Scaffold(
       appBar: AppBar(
         title: Text(
@@ -97,6 +123,21 @@ class _ServiceTrackerScreenState extends State<ServiceTrackerScreen> {
                       hintText: '4500',
                     ),
                   ),
+                  const SizedBox(height: 16),
+                  if (accountsVM.accounts.isNotEmpty)
+                    DropdownButtonFormField<String>(
+                      decoration: const InputDecoration(
+                        labelText: 'Payment Account',
+                      ),
+                      value: _selectedAccountId,
+                      items: accountsVM.accounts.map((a) {
+                        return DropdownMenuItem(
+                          value: a.id,
+                          child: Text(a.name),
+                        );
+                      }).toList(),
+                      onChanged: (val) => setState(() => _selectedAccountId = val),
+                    ),
                   const SizedBox(height: 16),
                   ListTile(
                     contentPadding: EdgeInsets.zero,
@@ -251,10 +292,12 @@ class _ServiceTrackerScreenState extends State<ServiceTrackerScreen> {
     );
 
     final vm = context.read<ServiceViewModel>();
+    final accountId = _selectedAccountId ?? 'cash';
+
     if (widget.existingService == null) {
-      vm.addService(service);
+      vm.addService(service, accountId);
     } else {
-      vm.updateService(service);
+      vm.updateService(service, accountId);
     }
 
     Navigator.pop(context);

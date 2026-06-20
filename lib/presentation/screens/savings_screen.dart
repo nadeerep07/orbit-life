@@ -3,7 +3,9 @@ import 'package:provider/provider.dart';
 import '../theme/app_theme.dart';
 import '../viewmodels/savings_view_model.dart';
 import '../viewmodels/expense_view_model.dart';
+import '../viewmodels/accounts_view_model.dart';
 import 'package:intl/intl.dart';
+import '../../core/utils/currency_formatter.dart';
 
 class SavingsScreen extends StatelessWidget {
   const SavingsScreen({super.key});
@@ -40,7 +42,7 @@ class SavingsScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    '₹${currentBalance.toStringAsFixed(2)}',
+                    '$currencySymbol${currentBalance.toStringAsFixed(2)}',
                     style: TextStyle(
                       fontSize: 36,
                       fontWeight: FontWeight.bold,
@@ -122,7 +124,7 @@ class SavingsScreen extends StatelessWidget {
                     DateFormat('dd MMM yyyy - hh:mm a').format(exp.date),
                   ),
                   trailing: Text(
-                    '-₹${exp.amount.toStringAsFixed(0)}',
+                    '-$currencySymbol${exp.amount.toStringAsFixed(0)}',
                     style: TextStyle(
                       fontWeight: FontWeight.bold,
                       color: Theme.of(context).colorScheme.error,
@@ -155,7 +157,7 @@ class SavingsScreen extends StatelessWidget {
         ),
         const SizedBox(height: 4),
         Text(
-          '₹${amount.toStringAsFixed(0)}',
+          '$currencySymbol${amount.toStringAsFixed(0)}',
           style: TextStyle(
             fontWeight: FontWeight.bold,
             fontSize: 16,
@@ -168,31 +170,72 @@ class SavingsScreen extends StatelessWidget {
 
   void _addFundsDialog(BuildContext context) {
     final ctrl = TextEditingController();
+    final accountsVM = context.read<AccountsViewModel>();
+    String? selectedAccountId = accountsVM.accounts.isNotEmpty ? accountsVM.accounts.first.id : null;
+
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Add Funds'),
-        content: TextField(
-          controller: ctrl,
-          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          decoration: const InputDecoration(labelText: 'Amount (₹)'),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: const Text('Add Funds to Savings'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: ctrl,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                decoration: InputDecoration(labelText: 'Amount ($currencySymbol)'),
+              ),
+              const SizedBox(height: 16),
+              if (accountsVM.accounts.isEmpty)
+                const Text('No accounts available to fund savings.', style: TextStyle(color: Colors.red))
+              else
+                DropdownButtonFormField<String>(
+                  decoration: const InputDecoration(labelText: 'Source Account'),
+                  value: selectedAccountId,
+                  items: accountsVM.accounts.map((a) {
+                    return DropdownMenuItem(
+                      value: a.id,
+                      child: Text('${a.name} (Bal: $currencySymbol${a.openingBalance.toStringAsFixed(0)})'),
+                    );
+                  }).toList(),
+                  onChanged: (val) {
+                    setDialogState(() {
+                      selectedAccountId = val;
+                    });
+                  },
+                ),
+            ],
           ),
-          ElevatedButton(
-            onPressed: () {
-              final val = double.tryParse(ctrl.text);
-              if (val != null && val > 0) {
-                context.read<SavingsViewModel>().addToSavings(val);
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                final val = double.tryParse(ctrl.text);
+                if (val == null || val <= 0) return;
+                if (selectedAccountId == null) return;
+
+                final selectedAcc = accountsVM.accounts.firstWhere((a) => a.id == selectedAccountId);
+                if (selectedAcc.openingBalance < val) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: const Text('Insufficient balance in selected account.'),
+                      backgroundColor: Theme.of(context).colorScheme.error,
+                    ),
+                  );
+                  return;
+                }
+
+                context.read<SavingsViewModel>().addToSavings(val, selectedAccountId!);
                 Navigator.pop(ctx);
-              }
-            },
-            child: const Text('Add'),
-          ),
-        ],
+              },
+              child: const Text('Add'),
+            ),
+          ],
+        ),
       ),
     );
   }

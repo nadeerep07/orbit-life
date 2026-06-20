@@ -12,6 +12,9 @@ import '../models/diet_model.dart';
 import '../models/emi_tracker_model.dart';
 import '../models/borrow_lend_model.dart';
 import '../models/investment_model.dart';
+import '../models/transaction_model.dart';
+import '../models/settings_model.dart';
+
 
 abstract class LocalDataSource {
   Future<void> init();
@@ -92,6 +95,16 @@ abstract class LocalDataSource {
   Future<void> addInvestment(InvestmentModel investment);
   Future<void> updateInvestment(InvestmentModel investment);
   Future<void> deleteInvestment(String id);
+
+  // Transactions
+  Future<List<TransactionModel>> getTransactions();
+  Future<void> addTransaction(TransactionModel transaction);
+  Future<void> updateTransaction(TransactionModel transaction);
+  Future<void> deleteTransaction(String id);
+
+  // Settings
+  Future<SettingsModel?> getSettings();
+  Future<void> saveSettings(SettingsModel settings);
 }
 
 class HiveDataSourceImpl implements LocalDataSource {
@@ -109,6 +122,8 @@ class HiveDataSourceImpl implements LocalDataSource {
   late Box<EmiTrackerModel> _emiTrackerBox;
   late Box<BorrowLendModel> _borrowLendBox;
   late Box<InvestmentModel> _investmentBox;
+  late Box<TransactionModel> _transactionBox;
+  late Box<SettingsModel> _appSettingsBox;
 
   @override
   Future<void> init() async {
@@ -126,6 +141,8 @@ class HiveDataSourceImpl implements LocalDataSource {
     _emiTrackerBox = await Hive.openBox<EmiTrackerModel>('emiTrackerBox');
     _borrowLendBox = await Hive.openBox<BorrowLendModel>('borrowLendBox');
     _investmentBox = await Hive.openBox<InvestmentModel>('investmentBox');
+    _transactionBox = await Hive.openBox<TransactionModel>('transactions_box');
+    _appSettingsBox = await Hive.openBox<SettingsModel>('appSettingsBox');
 
     // Initialize default categories if box is empty
     await _migrateLegacyCategories();
@@ -545,5 +562,38 @@ class HiveDataSourceImpl implements LocalDataSource {
   @override
   Future<void> deleteInvestment(String id) async {
     await _investmentBox.delete(id);
+  }
+
+  // --- Transactions ---
+  @override
+  Future<List<TransactionModel>> getTransactions() async {
+    return _transactionBox.values.toList();
+  }
+
+  @override
+  Future<void> addTransaction(TransactionModel transaction) async {
+    await _transactionBox.put(transaction.id, transaction);
+  }
+
+  @override
+  Future<void> updateTransaction(TransactionModel transaction) async {
+    await _transactionBox.put(transaction.id, transaction);
+  }
+
+  @override
+  Future<void> deleteTransaction(String id) async {
+    await _transactionBox.delete(id);
+  }
+
+  // --- Settings ---
+  @override
+  Future<SettingsModel?> getSettings() async {
+    if (_appSettingsBox.isEmpty) return null;
+    return _appSettingsBox.get('app_settings');
+  }
+
+  @override
+  Future<void> saveSettings(SettingsModel settings) async {
+    await _appSettingsBox.put('app_settings', settings);
   }
 }

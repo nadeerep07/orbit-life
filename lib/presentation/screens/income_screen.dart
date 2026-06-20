@@ -5,6 +5,8 @@ import '../../domain/entities/income_entity.dart';
 import '../viewmodels/income_view_model.dart';
 import '../viewmodels/accounts_view_model.dart';
 import '../viewmodels/theme_view_model.dart';
+import '../../core/utils/currency_formatter.dart';
+import 'allocation_preview_screen.dart';
 
 class IncomeScreen extends StatefulWidget {
   const IncomeScreen({super.key});
@@ -119,7 +121,7 @@ class _IncomeScreenState extends State<IncomeScreen> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  '₹${totalIncome.toStringAsFixed(0)}',
+                  '$currencySymbol${totalIncome.toStringAsFixed(0)}',
                   style: const TextStyle(
                     fontSize: 36,
                     fontWeight: FontWeight.bold,
@@ -155,12 +157,6 @@ class _IncomeScreenState extends State<IncomeScreen> {
                           child: const Icon(Icons.delete, color: Colors.white),
                         ),
                         onDismissed: (direction) async {
-                          // Reverse the account balance before deleting
-                          final accountsVM = context.read<AccountsViewModel>();
-                          await accountsVM.updateAccountBalance(
-                            income.accountId,
-                            -income.amount,
-                          );
                           await incomeVM.deleteIncome(income.id);
                         },
                         child: Container(
@@ -213,7 +209,7 @@ class _IncomeScreenState extends State<IncomeScreen> {
                               ],
                             ),
                             trailing: Text(
-                              '+ ₹${income.amount.toStringAsFixed(0)}',
+                              '+ $currencySymbol${income.amount.toStringAsFixed(0)}',
                               style: const TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.bold,
@@ -270,16 +266,15 @@ class _AddIncomeSheetState extends State<_AddIncomeSheet> {
       accountId: _selectedAccountId!,
     );
 
-    // Add Income
-    await context.read<IncomeViewModel>().addIncome(income);
-
-    // Update Account Balance
-    await context.read<AccountsViewModel>().updateAccountBalance(
-      _selectedAccountId!,
-      amount,
-    );
-
-    if (mounted) Navigator.pop(context);
+    if (mounted) {
+      Navigator.pop(context); // close bottom sheet
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => AllocationPreviewScreen(income: income),
+        ),
+      );
+    }
   }
 
   @override
@@ -321,7 +316,7 @@ class _AddIncomeSheetState extends State<_AddIncomeSheet> {
                 decimal: true,
               ),
               decoration: InputDecoration(
-                labelText: 'Amount (₹)',
+                labelText: 'Amount ($currencySymbol)',
                 border: const OutlineInputBorder(
                   borderRadius: BorderRadius.all(Radius.circular(16)),
                 ),

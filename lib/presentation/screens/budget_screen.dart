@@ -5,6 +5,7 @@ import '../viewmodels/budget_view_model.dart';
 import '../viewmodels/expense_view_model.dart';
 import '../viewmodels/month_view_model.dart';
 import 'package:intl/intl.dart';
+import '../../core/utils/currency_formatter.dart';
 
 class BudgetScreen extends StatelessWidget {
   const BudgetScreen({super.key});
@@ -99,7 +100,7 @@ class BudgetScreen extends StatelessWidget {
                           Row(
                             children: [
                               Text(
-                                '₹${cat.monthlyBudget.toStringAsFixed(0)} / mo',
+                                '$currencySymbol${cat.monthlyBudget.toStringAsFixed(0)} / mo',
                                 style: TextStyle(
                                   color: Theme.of(
                                     context,
@@ -152,9 +153,9 @@ class BudgetScreen extends StatelessWidget {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Text('Spent: ₹${spent.toStringAsFixed(0)}'),
+                          Text('Spent: $currencySymbol${spent.toStringAsFixed(0)}'),
                           Text(
-                            'Left: ₹${remaining.toStringAsFixed(0)}',
+                            'Left: $currencySymbol${remaining.toStringAsFixed(0)}',
                             style: TextStyle(
                               color: remaining < 0
                                   ? Theme.of(context).colorScheme.error

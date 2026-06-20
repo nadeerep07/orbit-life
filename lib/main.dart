@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:hive_flutter/hive_flutter.dart';
+import 'package:my_budget_pro/domain/repositories/settings_repository.dart';
+import 'package:my_budget_pro/domain/repositories/transaction_repository.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
@@ -65,6 +67,8 @@ import 'core/utils/data_fixer.dart';
 // import 'data/datasources/local_data_source.dart';
 
 import 'data/models/investment_model.dart';
+import 'data/models/transaction_model.dart';
+import 'data/models/settings_model.dart';
 import 'data/repositories/investment_repository_impl.dart';
 import 'presentation/viewmodels/investment_view_model.dart';
 
@@ -73,8 +77,11 @@ import 'presentation/viewmodels/account_detail_view_model.dart';
 
 import 'presentation/theme/light_theme.dart';
 import 'presentation/theme/dark_theme.dart';
+import 'data/repositories/settings_repository_impl.dart';
+import 'presentation/viewmodels/settings_view_model.dart';
 
 import 'presentation/widgets/app_lock_wrapper.dart';
+import 'core/utils/currency_formatter.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -102,11 +109,17 @@ void main() async {
   Hive.registerAdapter(BorrowLendModelAdapter());
   Hive.registerAdapter(BorrowLendTransactionModelAdapter());
   Hive.registerAdapter(InvestmentModelAdapter());
+  Hive.registerAdapter(TransactionModelAdapter());
+  Hive.registerAdapter(SettingsModelAdapter());
   await Hive.openBox('settingsBox'); // Initialize settingsBox
 
   // Data Sources & Repositories
   final localDataSource = HiveDataSourceImpl();
   await localDataSource.init();
+
+  final settingsRepository = SettingsRepositoryImpl(localDataSource);
+  final settings = await settingsRepository.getSettings();
+  currencySymbol = settings.currencySymbol;
 
   final categoryRepository = CategoryRepositoryImpl(localDataSource);
   final expenseRepository = ExpenseRepositoryImpl(localDataSource);
@@ -131,6 +144,11 @@ void main() async {
   runApp(
     MultiProvider(
       providers: [
+        Provider<TransactionRepository>.value(value: transactionRepository),
+        Provider<SettingsRepository>.value(value: settingsRepository),
+        ChangeNotifierProvider(
+          create: (_) => SettingsViewModel(settingsRepository),
+        ),
         ChangeNotifierProvider(create: (_) => MonthViewModel()),
         ChangeNotifierProxyProvider<MonthViewModel, BudgetViewModel>(
           create: (context) =>
@@ -141,16 +159,16 @@ void main() async {
                 ..loadCategories(monthVM.currentMonth),
         ),
         ChangeNotifierProvider(
-          create: (_) => ExpenseViewModel(expenseRepository)..loadExpenses(),
+          create: (_) => ExpenseViewModel(expenseRepository, transactionRepository)..loadExpenses(),
         ),
         ChangeNotifierProvider(
-          create: (_) => AccountsViewModel(accountRepository)..loadAccounts(),
+          create: (_) => AccountsViewModel(accountRepository, transactionRepository)..loadAccounts(),
         ),
         ChangeNotifierProvider(
-          create: (_) => SavingsViewModel(savingsRepository)..loadSavings(),
+          create: (_) => SavingsViewModel(savingsRepository, transactionRepository)..loadSavings(),
         ),
         ChangeNotifierProvider(
-          create: (_) => IncomeViewModel(incomeRepository)..loadIncomes(),
+          create: (_) => IncomeViewModel(incomeRepository, transactionRepository)..loadIncomes(),
         ),
         ChangeNotifierProvider(create: (_) => AuthViewModel()),
         ChangeNotifierProvider(create: (_) => ThemeViewModel()),
@@ -169,63 +187,26 @@ void main() async {
                     MileageViewModel(mileageRepository, expenseVM, accountsVM))
                 ..loadEntries(),
         ),
-        ChangeNotifierProxyProvider2<
-          AccountsViewModel,
-          SavingsViewModel,
-          TransferViewModel
-        >(
-          create: (context) => TransferViewModel(
-            transferRepository,
-            context.read<AccountsViewModel>(),
-            context.read<SavingsViewModel>(),
-          )..loadTransfers(),
-          update: (context, accountsVM, savingsVM, previous) =>
-              (previous ??
-                    TransferViewModel(
-                      transferRepository,
-                      accountsVM,
-                      savingsVM,
-                    ))
-                ..loadTransfers(),
+        ChangeNotifierProvider(
+          create: (_) => TransferViewModel(transferRepository, transactionRepository)..loadTransfers(),
         ),
         ChangeNotifierProvider(
-          create: (_) => GoalsViewModel(goalRepository)..loadGoals(),
+          create: (_) => GoalsViewModel(goalRepository, transactionRepository)..loadGoals(),
         ),
         ChangeNotifierProvider(
-          create: (_) => ServiceViewModel(serviceRepository)..loadServices(),
+          create: (_) => ServiceViewModel(serviceRepository, transactionRepository)..loadServices(),
         ),
         ChangeNotifierProvider(
           create: (_) => DietViewModel(dietRepository)..loadDietData(),
         ),
-        ChangeNotifierProxyProvider<AccountsViewModel, EmiTrackerViewModel>(
-          create: (context) => EmiTrackerViewModel(
-            emiTrackerRepository,
-            context.read<AccountsViewModel>(),
-          )..loadEmis(),
-          update: (context, accountsVM, previous) =>
-              (previous ??
-                    EmiTrackerViewModel(emiTrackerRepository, accountsVM))
-                ..loadEmis(),
+        ChangeNotifierProvider(
+          create: (_) => EmiTrackerViewModel(emiTrackerRepository, transactionRepository)..loadEmis(),
         ),
-        ChangeNotifierProxyProvider<AccountsViewModel, BorrowLendViewModel>(
-          create: (context) => BorrowLendViewModel(
-            borrowLendRepository,
-            context.read<AccountsViewModel>(),
-          )..loadEntries(),
-          update: (context, accountsVM, previous) =>
-              (previous ??
-                    BorrowLendViewModel(borrowLendRepository, accountsVM))
-                ..loadEntries(),
+        ChangeNotifierProvider(
+          create: (_) => BorrowLendViewModel(borrowLendRepository, transactionRepository)..loadEntries(),
         ),
-        ChangeNotifierProxyProvider<AccountsViewModel, InvestmentViewModel>(
-          create: (context) => InvestmentViewModel(
-            investmentRepository,
-            context.read<AccountsViewModel>(),
-          )..loadInvestments(),
-          update: (context, accountsVM, previous) =>
-              (previous ??
-                    InvestmentViewModel(investmentRepository, accountsVM))
-                ..loadInvestments(),
+        ChangeNotifierProvider(
+          create: (_) => InvestmentViewModel(investmentRepository, transactionRepository)..loadInvestments(),
         ),
         ChangeNotifierProvider(
           create: (_) =>

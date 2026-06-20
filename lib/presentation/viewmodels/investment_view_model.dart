@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 import '../../domain/entities/investment_entity.dart';
+import '../../domain/entities/transaction_entity.dart';
 import '../../domain/repositories/investment_repository.dart';
+import '../../domain/repositories/transaction_repository.dart';
 import '../../core/services/notification_service.dart';
-import 'accounts_view_model.dart';
+import '../../core/utils/currency_formatter.dart';
 
 class InvestmentViewModel extends ChangeNotifier {
   final InvestmentRepository _repository;
+  final TransactionRepository _transactionRepository;
 
   List<InvestmentEntity> _investments = [];
   List<InvestmentEntity> get investments => _investments;
@@ -13,9 +16,7 @@ class InvestmentViewModel extends ChangeNotifier {
   bool _isLoading = false;
   bool get isLoading => _isLoading;
 
-  final AccountsViewModel _accountsViewModel;
-
-  InvestmentViewModel(this._repository, this._accountsViewModel);
+  InvestmentViewModel(this._repository, this._transactionRepository);
 
   Future<void> loadInvestments() async {
     _isLoading = true;
@@ -38,17 +39,38 @@ class InvestmentViewModel extends ChangeNotifier {
       await _scheduleSipReminder(investment);
     }
 
-    // Deduct invested amount from the selected account
-    await _accountsViewModel.updateAccountBalance(
-      investment.accountId,
-      -investment.investedAmount,
+    // Record investment transaction
+    final tx = TransactionEntity(
+      id: investment.id,
+      amount: investment.investedAmount,
+      type: TransactionType.investment,
+      accountId: investment.accountId,
+      categoryOrSource: 'Investment - ${investment.name}',
+      date: investment.date,
+      description: investment.notes,
+      referenceId: investment.id,
     );
+    await _transactionRepository.addTransaction(tx);
 
     await loadInvestments();
   }
 
   Future<void> updateInvestment(InvestmentEntity investment) async {
     await _repository.updateInvestment(investment);
+
+    // Update investment transaction (automatically handles balance changes on edit)
+    final tx = TransactionEntity(
+      id: investment.id,
+      amount: investment.investedAmount,
+      type: TransactionType.investment,
+      accountId: investment.accountId,
+      categoryOrSource: 'Investment - ${investment.name}',
+      date: investment.date,
+      description: investment.notes,
+      referenceId: investment.id,
+    );
+    await _transactionRepository.updateTransaction(tx);
+
     await loadInvestments();
   }
 
@@ -56,11 +78,8 @@ class InvestmentViewModel extends ChangeNotifier {
     final investment = _investments.firstWhere((inv) => inv.id == id);
     await _repository.deleteInvestment(id);
 
-    // Refund invested amount to the account
-    await _accountsViewModel.updateAccountBalance(
-      investment.accountId,
-      investment.investedAmount,
-    );
+    // Delete transaction to refund the balance automatically
+    await _transactionRepository.deleteTransaction(id);
 
     await NotificationService().cancelNotification(id.hashCode.abs());
     await loadInvestments();
@@ -95,7 +114,7 @@ class InvestmentViewModel extends ChangeNotifier {
 
     String title = 'SIP Reminder';
     String body =
-        'Your ₹${investment.investedAmount.toStringAsFixed(0)} ${investment.name} SIP is due tomorrow.';
+        'Your $currencySymbol${investment.investedAmount.toStringAsFixed(0)} ${investment.name} SIP is due tomorrow.';
 
     await NotificationService().scheduleNotification(
       id: id,

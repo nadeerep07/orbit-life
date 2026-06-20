@@ -6,6 +6,7 @@ import '../theme/app_theme.dart';
 import '../viewmodels/accounts_view_model.dart';
 import '../viewmodels/savings_view_model.dart';
 import '../viewmodels/transfer_view_model.dart';
+import '../../core/utils/currency_formatter.dart';
 import 'transfer_history_screen.dart';
 
 class TransferScreen extends StatefulWidget {
@@ -67,13 +68,13 @@ class _TransferScreenState extends State<TransferScreen> {
                       fontWeight: FontWeight.bold,
                       color: Theme.of(context).colorScheme.primary,
                     ),
-                    decoration: const InputDecoration(
-                      hintText: '₹0',
+                    decoration: InputDecoration(
+                      hintText: '${currencySymbol}0',
                       border: InputBorder.none,
                       enabledBorder: InputBorder.none,
                       focusedBorder: InputBorder.none,
                       fillColor: Colors.transparent,
-                      prefixText: '₹ ',
+                      prefixText: '$currencySymbol ',
                     ),
                   ),
                   const Divider(),
