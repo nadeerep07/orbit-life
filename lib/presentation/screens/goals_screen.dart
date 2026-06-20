@@ -298,7 +298,7 @@ class _GoalsScreenState extends State<GoalsScreen> {
               else
                 DropdownButtonFormField<String>(
                   decoration: const InputDecoration(labelText: 'Source Account'),
-                  value: selectedAccountId,
+                  initialValue: selectedAccountId,
                   items: accountsVM.accounts.map((a) {
                     return DropdownMenuItem(
                       value: a.id,

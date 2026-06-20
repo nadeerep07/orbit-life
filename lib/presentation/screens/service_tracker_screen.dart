@@ -129,7 +129,7 @@ class _ServiceTrackerScreenState extends State<ServiceTrackerScreen> {
                       decoration: const InputDecoration(
                         labelText: 'Payment Account',
                       ),
-                      value: _selectedAccountId,
+                      initialValue: _selectedAccountId,
                       items: accountsVM.accounts.map((a) {
                         return DropdownMenuItem(
                           value: a.id,

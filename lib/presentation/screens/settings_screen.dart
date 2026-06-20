@@ -180,7 +180,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               title: const Text('Auto Money Allocation', style: TextStyle(fontWeight: FontWeight.w600)),
               subtitle: const Text('Direct incoming salaries to mandatory budgets automatically'),
               value: settings.enableAutoAllocation,
-              activeColor: Theme.of(context).colorScheme.primary,
+              activeThumbColor: Theme.of(context).colorScheme.primary,
               onChanged: (val) => settingsVM.updateAutoAllocation(val),
             ),
             const Divider(),
@@ -374,7 +374,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               title: const Text('Limit Rollover'),
               subtitle: const Text('Roll over unspent daily budget to next days'),
               value: settings.dailyLimitRollover,
-              activeColor: Theme.of(context).colorScheme.primary,
+              activeThumbColor: Theme.of(context).colorScheme.primary,
               onChanged: (val) => settingsVM.updateDailyLimitRollover(val),
             ),
           ],
@@ -411,7 +411,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               title: const Text('Biometrics / PIN App Lock'),
               subtitle: const Text('Secure access to your sensitive financial logs'),
               value: settings.enableBiometrics,
-              activeColor: Theme.of(context).colorScheme.primary,
+              activeThumbColor: Theme.of(context).colorScheme.primary,
               onChanged: (val) async {
                 if (val) {
                   final authenticated = await LocalAuthService.authenticate();
