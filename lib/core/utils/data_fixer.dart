@@ -3,7 +3,6 @@ import '../../data/datasources/local_data_source.dart';
 import '../../domain/repositories/transaction_repository.dart';
 import '../../data/models/borrow_lend_model.dart';
 import '../../data/models/borrow_lend_transaction_model.dart';
-import '../../data/models/account_model.dart';
 import '../../data/models/transaction_model.dart';
 
 class DataFixer {

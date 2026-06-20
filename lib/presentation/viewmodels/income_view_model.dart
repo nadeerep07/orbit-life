@@ -6,8 +6,6 @@ import '../../domain/repositories/transaction_repository.dart';
 import '../../core/services/obligation_analysis_engine.dart';
 import '../../core/services/savings_recommendation_engine.dart';
 import '../../core/services/debt_optimization_engine.dart';
-import '../../core/services/spendable_wallet_engine.dart';
-import '../../core/services/daily_spending_engine.dart';
 import '../../domain/entities/settings_entity.dart';
 import '../../domain/entities/emi_tracker_entity.dart';
 import '../../domain/entities/borrow_lend_entity.dart';

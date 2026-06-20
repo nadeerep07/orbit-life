@@ -144,7 +144,7 @@ class _AccountDetailScreenState extends State<AccountDetailScreen> {
                   const Text('Category Module', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                   const SizedBox(height: 8),
                   DropdownButtonFormField<String?>(
-                    value: tempModuleFilter,
+                    initialValue: tempModuleFilter,
                     decoration: const InputDecoration(
                       border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(12))),
                       contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
