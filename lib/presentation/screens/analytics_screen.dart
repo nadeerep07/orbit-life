@@ -6,6 +6,7 @@ import '../viewmodels/budget_view_model.dart';
 import '../viewmodels/expense_view_model.dart';
 import '../viewmodels/month_view_model.dart';
 import 'package:intl/intl.dart';
+import '../../core/utils/currency_formatter.dart';
 
 class AnalyticsScreen extends StatelessWidget {
   const AnalyticsScreen({super.key});
@@ -110,11 +111,11 @@ class AnalyticsScreen extends StatelessWidget {
                     children: [
                       _LegendItem(
                         color: Theme.of(context).colorScheme.primary,
-                        label: 'Budget\n₹${totalBudget.toStringAsFixed(0)}',
+                        label: 'Budget\n$currencySymbol${totalBudget.toStringAsFixed(0)}',
                       ),
                       _LegendItem(
                         color: Theme.of(context).colorScheme.error,
-                        label: 'Spent\n₹${totalSpent.toStringAsFixed(0)}',
+                        label: 'Spent\n$currencySymbol${totalSpent.toStringAsFixed(0)}',
                       ),
                     ],
                   ),
@@ -147,7 +148,7 @@ class AnalyticsScreen extends StatelessWidget {
                             style: const TextStyle(fontWeight: FontWeight.w500),
                           ),
                           Text(
-                            '₹${spent.toStringAsFixed(0)}',
+                            '$currencySymbol${spent.toStringAsFixed(0)}',
                             style: const TextStyle(fontWeight: FontWeight.bold),
                           ),
                         ],

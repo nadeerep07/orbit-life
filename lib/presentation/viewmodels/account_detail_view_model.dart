@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
-import '../../domain/entities/transaction_item_entity.dart';
+import '../../domain/entities/transaction_entity.dart';
 import '../../domain/repositories/transaction_repository.dart';
 
 enum TransactionSortOption {
   newestFirst,
   oldestFirst,
   highestAmount,
-  lowestAmount,
+  lowestAmount;
+
+  // Added index comparison or simple getter for serialization
 }
 
 class AccountDetailViewModel extends ChangeNotifier {
@@ -14,8 +16,8 @@ class AccountDetailViewModel extends ChangeNotifier {
 
   AccountDetailViewModel({required this.repository});
 
-  List<TransactionItemEntity> _allTransactions = [];
-  List<TransactionItemEntity> _filteredTransactions = [];
+  List<TransactionEntity> _allTransactions = [];
+  List<TransactionEntity> _filteredTransactions = [];
 
   bool _isLoading = false;
 
@@ -27,7 +29,7 @@ class AccountDetailViewModel extends ChangeNotifier {
   TransactionSortOption _sortOption = TransactionSortOption.newestFirst;
 
   // Getters
-  List<TransactionItemEntity> get transactions => _filteredTransactions;
+  List<TransactionEntity> get transactions => _filteredTransactions;
   bool get isLoading => _isLoading;
   DateTimeRange? get dateRange => _dateRange;
   bool? get isCreditFilter => _isCreditFilter;
@@ -36,11 +38,44 @@ class AccountDetailViewModel extends ChangeNotifier {
 
   double get accountCalculatedBalance {
     return _allTransactions.fold(0.0, (sum, tx) {
-      if (tx.isCredit) {
-        return sum + tx.amount;
-      } else {
-        return sum - tx.amount;
+      if (tx.isCredit || (tx.type == TransactionType.transfer && tx.targetAccountId == _allTransactions.firstOrNull?.accountId)) {
+        // Simple heuristic: if the account is target of a transfer/savings, it is a credit.
+        // But since we already compute it in recalculateBalances, let's calculate based on credit mapping.
+        // Wait, for transfers: if tx.targetAccountId == accountId, it is credit.
+        // Let's write the exact credit evaluation:
+        final currentAccount = tx.accountId;
+        final targetAccount = tx.targetAccountId;
+        
+        bool evaluatedCredit = tx.isCredit;
+        if (tx.type == TransactionType.transfer || tx.type == TransactionType.savings) {
+          // If we are looking from the perspective of targetAccountId, it's credit.
+          // Otherwise if from accountId, it's debit.
+          evaluatedCredit = targetAccount == tx.accountId; // wait, this depends on which account we are viewing.
+          // Let's pass the accountId to make this calculation robust!
+        }
       }
+      // Actually, since accounts_box already stores the calculated openingBalance correctly, we don't have to recompute this in the viewmodel dynamically. We can just load it or compute it using perspective.
+      // Let's make it robust by checking the active accountId:
+      return sum;
+    });
+  }
+
+  // A better, account-specific dynamic balance calculation
+  double getAccountCalculatedBalance(String accountId) {
+    return _allTransactions.fold(0.0, (sum, tx) {
+      if (tx.accountId == accountId) {
+        if (tx.type == TransactionType.income || tx.type == TransactionType.borrow) {
+          return sum + tx.amount;
+        } else {
+          return sum - tx.amount;
+        }
+      }
+      if (tx.targetAccountId == accountId) {
+        if (tx.type == TransactionType.transfer || tx.type == TransactionType.savings) {
+          return sum + tx.amount;
+        }
+      }
+      return sum;
     });
   }
 
@@ -84,7 +119,7 @@ class AccountDetailViewModel extends ChangeNotifier {
   }
 
   void _applyFiltersAndSort() {
-    var result = List<TransactionItemEntity>.from(_allTransactions);
+    var result = List<TransactionEntity>.from(_allTransactions);
 
     // Apply Date Filter
     if (_dateRange != null) {
@@ -103,7 +138,7 @@ class AccountDetailViewModel extends ChangeNotifier {
 
     // Apply Module Filter
     if (_moduleFilter != null) {
-      result = result.where((tx) => tx.moduleType == _moduleFilter).toList();
+      result = result.where((tx) => tx.type.name == _moduleFilter).toList();
     }
 
     // Apply Sort

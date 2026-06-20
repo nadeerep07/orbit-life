@@ -7,6 +7,7 @@ import '../viewmodels/accounts_view_model.dart';
 import '../viewmodels/budget_view_model.dart';
 import '../viewmodels/expense_view_model.dart';
 import '../viewmodels/savings_view_model.dart';
+import '../../core/utils/currency_formatter.dart';
 
 class AddExpenseScreen extends StatefulWidget {
   final ExpenseEntity? existingExpense;
@@ -66,8 +67,8 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                       fontSize: 32,
                       fontWeight: FontWeight.bold,
                     ),
-                    decoration: const InputDecoration(
-                      hintText: '₹0',
+                    decoration: InputDecoration(
+                      hintText: '${currencySymbol}0',
                       border: InputBorder.none,
                       enabledBorder: InputBorder.none,
                       focusedBorder: InputBorder.none,
@@ -257,36 +258,9 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
     );
 
     if (widget.existingExpense != null) {
-      // Reverse previous transaction
-      final old = widget.existingExpense!;
-      if (old.isFromSavings) {
-        await context.read<SavingsViewModel>().addToSavings(old.amount);
-      } else {
-        await context.read<AccountsViewModel>().updateAccountBalance(
-          old.accountId,
-          old.amount,
-        );
-      }
-      // Apply new transaction
       await context.read<ExpenseViewModel>().updateExpense(expense);
-      if (_isFromSavings) {
-        await context.read<SavingsViewModel>().deductFromSavings(amount);
-      } else {
-        await context.read<AccountsViewModel>().updateAccountBalance(
-          _selectedAccount!,
-          -amount,
-        );
-      }
     } else {
       await context.read<ExpenseViewModel>().addExpense(expense);
-      if (_isFromSavings) {
-        await context.read<SavingsViewModel>().deductFromSavings(amount);
-      } else {
-        await context.read<AccountsViewModel>().updateAccountBalance(
-          _selectedAccount!,
-          -amount,
-        );
-      }
     }
 
     if (mounted) Navigator.pop(context);

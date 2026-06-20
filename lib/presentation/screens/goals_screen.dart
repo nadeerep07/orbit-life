@@ -2,12 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
+import '../../core/utils/currency_formatter.dart';
 import '../theme/app_theme.dart';
 import '../viewmodels/goals_view_model.dart';
 import '../viewmodels/income_view_model.dart';
 import '../viewmodels/expense_view_model.dart';
 import '../viewmodels/savings_view_model.dart';
+import '../viewmodels/accounts_view_model.dart';
 import '../../core/services/ai_service.dart';
+import '../../core/services/notification_service.dart';
 import 'add_goal_screen.dart';
 
 class GoalsScreen extends StatefulWidget {
@@ -124,7 +127,7 @@ class _GoalsScreenState extends State<GoalsScreen> {
 
                           /// Target
                           Text(
-                            "Target: ₹${goal.targetAmount.toStringAsFixed(0)}",
+                            "Target: $currencySymbol${goal.targetAmount.toStringAsFixed(0)}",
                             style: TextStyle(
                               color: Theme.of(
                                 context,
@@ -139,7 +142,7 @@ class _GoalsScreenState extends State<GoalsScreen> {
                             children: [
                               Expanded(
                                 child: Text(
-                                  "Saved: ₹${goal.currentSavings.toStringAsFixed(0)}",
+                                  "Saved: $currencySymbol${goal.currentSavings.toStringAsFixed(0)}",
                                   overflow: TextOverflow.ellipsis,
                                 ),
                               ),
@@ -174,7 +177,7 @@ class _GoalsScreenState extends State<GoalsScreen> {
                               Expanded(
                                 child: Text(
                                   remaining > 0
-                                      ? "Remaining: ₹${remaining.toStringAsFixed(0)}"
+                                      ? "Remaining: $currencySymbol${remaining.toStringAsFixed(0)}"
                                       : "Goal Achieved 🎉",
                                   style: TextStyle(
                                     fontWeight: FontWeight.bold,
@@ -273,39 +276,72 @@ class _GoalsScreenState extends State<GoalsScreen> {
 
   void _addSavingsDialog(BuildContext context, goal) {
     final ctrl = TextEditingController();
+    final accountsVM = context.read<AccountsViewModel>();
+    String? selectedAccountId = accountsVM.accounts.isNotEmpty ? accountsVM.accounts.first.id : null;
 
     showDialog(
       context: context,
-
-      builder: (ctx) => AlertDialog(
-        title: Text("Add Savings to ${goal.name}"),
-
-        content: TextField(
-          controller: ctrl,
-          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          decoration: const InputDecoration(labelText: "Amount (₹)"),
-        ),
-
-        actions: [
-          TextButton(
-            child: const Text("Cancel"),
-            onPressed: () => Navigator.pop(ctx),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: Text("Add Savings to ${goal.name}"),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: ctrl,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                decoration: InputDecoration(labelText: "Amount ($currencySymbol)"),
+              ),
+              const SizedBox(height: 16),
+              if (accountsVM.accounts.isEmpty)
+                const Text('No accounts available to fund this goal.', style: TextStyle(color: Colors.red))
+              else
+                DropdownButtonFormField<String>(
+                  decoration: const InputDecoration(labelText: 'Source Account'),
+                  value: selectedAccountId,
+                  items: accountsVM.accounts.map((a) {
+                    return DropdownMenuItem(
+                      value: a.id,
+                      child: Text('${a.name} (Bal: $currencySymbol${a.openingBalance.toStringAsFixed(0)})'),
+                    );
+                  }).toList(),
+                  onChanged: (val) {
+                    setDialogState(() {
+                      selectedAccountId = val;
+                    });
+                  },
+                ),
+            ],
           ),
+          actions: [
+            TextButton(
+              child: const Text("Cancel"),
+              onPressed: () => Navigator.pop(ctx),
+            ),
+            ElevatedButton(
+              child: const Text("Add"),
+              onPressed: () {
+                final val = double.tryParse(ctrl.text);
+                if (val == null || val <= 0) return;
+                if (selectedAccountId == null) return;
 
-          ElevatedButton(
-            child: const Text("Add"),
+                final selectedAcc = accountsVM.accounts.firstWhere((a) => a.id == selectedAccountId);
+                if (selectedAcc.openingBalance < val) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: const Text('Insufficient balance in selected account.'),
+                      backgroundColor: Theme.of(context).colorScheme.error,
+                    ),
+                  );
+                  return;
+                }
 
-            onPressed: () {
-              final val = double.tryParse(ctrl.text);
-
-              if (val != null && val > 0) {
-                context.read<GoalsViewModel>().addSavingsToGoal(goal.id, val);
-
+                context.read<GoalsViewModel>().addSavingsToGoal(goal.id, val, selectedAccountId!);
                 Navigator.pop(ctx);
-              }
-            },
-          ),
-        ],
+              },
+            ),
+          ],
+        ),
       ),
     );
   }

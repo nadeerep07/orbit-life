@@ -1,18 +1,17 @@
 import 'package:flutter/foundation.dart';
 import '../../domain/entities/transfer_entity.dart';
+import '../../domain/entities/transaction_entity.dart';
 import '../../domain/repositories/transfer_repository.dart';
-import 'accounts_view_model.dart';
-import 'savings_view_model.dart';
+import '../../domain/repositories/transaction_repository.dart';
 
 class TransferViewModel extends ChangeNotifier {
   final TransferRepository _repository;
-  final AccountsViewModel _accountsVM;
-  final SavingsViewModel _savingsVM;
+  final TransactionRepository _transactionRepository;
 
   List<TransferEntity> _transfers = [];
   bool _isLoading = false;
 
-  TransferViewModel(this._repository, this._accountsVM, this._savingsVM);
+  TransferViewModel(this._repository, this._transactionRepository);
 
   List<TransferEntity> get transfers => _transfers;
   bool get isLoading => _isLoading;
@@ -31,7 +30,18 @@ class TransferViewModel extends ChangeNotifier {
     await _repository.addTransfer(transfer);
     _transfers.insert(0, transfer);
 
-    await _applyTransferToBalances(transfer);
+    final tx = TransactionEntity(
+      id: transfer.id,
+      amount: transfer.amount,
+      type: TransactionType.transfer,
+      accountId: transfer.fromAccountId,
+      targetAccountId: transfer.toAccountId,
+      categoryOrSource: 'Transfer',
+      date: transfer.date,
+      description: transfer.description,
+      referenceId: transfer.id,
+    );
+    await _transactionRepository.addTransaction(tx);
 
     notifyListeners();
   }
@@ -45,10 +55,18 @@ class TransferViewModel extends ChangeNotifier {
     if (index != -1) {
       _transfers[index] = newTransfer;
 
-      // Reverse old transfer
-      await _reverseTransferFromBalances(oldTransfer);
-      // Apply new transfer
-      await _applyTransferToBalances(newTransfer);
+      final tx = TransactionEntity(
+        id: newTransfer.id,
+        amount: newTransfer.amount,
+        type: TransactionType.transfer,
+        accountId: newTransfer.fromAccountId,
+        targetAccountId: newTransfer.toAccountId,
+        categoryOrSource: 'Transfer',
+        date: newTransfer.date,
+        description: newTransfer.description,
+        referenceId: newTransfer.id,
+      );
+      await _transactionRepository.updateTransaction(tx);
 
       notifyListeners();
     }
@@ -58,42 +76,8 @@ class TransferViewModel extends ChangeNotifier {
     await _repository.deleteTransfer(transfer.id);
     _transfers.removeWhere((t) => t.id == transfer.id);
 
-    await _reverseTransferFromBalances(transfer);
+    await _transactionRepository.deleteTransaction(transfer.id);
 
     notifyListeners();
-  }
-
-  // --- Balance Management ---
-
-  Future<void> _applyTransferToBalances(TransferEntity t) async {
-    // Deduct from sender
-    if (t.fromAccountId == 'savings') {
-      await _savingsVM.deductFromSavings(t.amount);
-    } else {
-      await _accountsVM.updateAccountBalance(t.fromAccountId, -t.amount);
-    }
-
-    // Add to receiver
-    if (t.toAccountId == 'savings') {
-      await _savingsVM.addToSavings(t.amount);
-    } else {
-      await _accountsVM.updateAccountBalance(t.toAccountId, t.amount);
-    }
-  }
-
-  Future<void> _reverseTransferFromBalances(TransferEntity t) async {
-    // Return money to sender
-    if (t.fromAccountId == 'savings') {
-      await _savingsVM.addToSavings(t.amount);
-    } else {
-      await _accountsVM.updateAccountBalance(t.fromAccountId, t.amount);
-    }
-
-    // Deduct money from receiver
-    if (t.toAccountId == 'savings') {
-      await _savingsVM.deductFromSavings(t.amount);
-    } else {
-      await _accountsVM.updateAccountBalance(t.toAccountId, -t.amount);
-    }
   }
 }

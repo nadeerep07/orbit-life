@@ -1,4 +1,4 @@
 void main() {
-  dynamic value = null;
+  dynamic value;
   bool x = value as bool;
 }

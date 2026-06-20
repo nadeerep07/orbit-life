@@ -33,7 +33,7 @@ class MileageViewModel extends ChangeNotifier {
     // 2. Create linked Expense
     final linkedExpenseId = 'mileage_exp_${enrichedEntry.id}';
 
-    // Find generic Category (assuming Petrol or Transportation exists, otherwise fallback to first)
+    // Find generic Category (assuming Petrol or Transportation exists)
     final expense = ExpenseEntity(
       id: linkedExpenseId,
       categoryId: _getPetrolCategoryId() ?? 'default',
@@ -45,12 +45,8 @@ class MileageViewModel extends ChangeNotifier {
       source: 'mileage_tracker',
     );
 
-    // 3. Save Expense + Update Account Balance
+    // 3. Save Expense (automatically triggers transaction creation and balance deduction)
     await _expenseViewModel.addExpense(expense);
-    await _accountsViewModel.updateAccountBalance(
-      enrichedEntry.paymentMethodId,
-      -enrichedEntry.totalCost,
-    );
 
     // 4. Save enriched entry
     final finalizedEntry = MileageEntryEntity(
@@ -77,12 +73,6 @@ class MileageViewModel extends ChangeNotifier {
     if (oldEntryIndex == -1) return;
     final oldEntry = _entries[oldEntryIndex];
 
-    // Reverse old expense cost from account balance
-    await _accountsViewModel.updateAccountBalance(
-      oldEntry.paymentMethodId,
-      oldEntry.totalCost,
-    );
-
     // 2. Recalculate distance & mileage
     final enrichedEntry = _calculateMileage(updatedEntry);
 
@@ -101,12 +91,8 @@ class MileageViewModel extends ChangeNotifier {
       source: 'mileage_tracker',
     );
 
-    // Apply new expense
+    // Apply updated expense (automatically updates transaction and balance ledger)
     await _expenseViewModel.updateExpense(updatedExpense);
-    await _accountsViewModel.updateAccountBalance(
-      enrichedEntry.paymentMethodId,
-      -enrichedEntry.totalCost,
-    );
 
     final finalizedEntry = MileageEntryEntity(
       id: enrichedEntry.id,
@@ -129,13 +115,7 @@ class MileageViewModel extends ChangeNotifier {
   Future<void> deleteEntry(String id) async {
     final entry = _entries.firstWhere((e) => e.id == id);
 
-    // Reverse Account Balance
-    await _accountsViewModel.updateAccountBalance(
-      entry.paymentMethodId,
-      entry.totalCost,
-    );
-
-    // Delete linked expense
+    // Delete linked expense (automatically deletes transaction and refunds balance)
     if (entry.linkedExpenseId != null) {
       await _expenseViewModel.deleteExpense(entry.linkedExpenseId!);
     }
@@ -162,15 +142,12 @@ class MileageViewModel extends ChangeNotifier {
       );
     }
 
-    // Assuming entries are sorted descending (newest at index 0)
-    // Find the chronologically previous entry (first entry with a date BEFORE newEntry's date)
     final previousEntries = _entries
         .where((e) => e.date.isBefore(newEntry.date) && e.id != newEntry.id)
         .toList();
     previousEntries.sort((a, b) => b.date.compareTo(a.date));
 
     if (previousEntries.isEmpty) {
-      // It's the oldest entry chronologically
       return MileageEntryEntity(
         id: newEntry.id,
         date: newEntry.date,
@@ -209,7 +186,6 @@ class MileageViewModel extends ChangeNotifier {
     );
   }
 
-  // Dashboard calculations
   double get totalDistanceTravelled {
     return _entries.fold(
       0.0,
@@ -236,8 +212,6 @@ class MileageViewModel extends ChangeNotifier {
   }
 
   String? _getPetrolCategoryId() {
-    // A quick scan inside expense categories.
-    // Ideally this shouldn't be hardcoded but retrieved dynamically from BudgetVM
     return null;
   }
 }

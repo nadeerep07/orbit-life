@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
+import '../utils/currency_formatter.dart';
 
 class AIService {
   static const String _openAiEndpoint =
@@ -108,18 +109,18 @@ class AIService {
         final monthlyRequired = remaining / monthsRemaining;
 
         optionalCalculations =
-            ", months left: $monthsRemaining, required monthly: ₹${monthlyRequired.toStringAsFixed(0)}";
+            ", months left: $monthsRemaining, required monthly: $currencySymbol${monthlyRequired.toStringAsFixed(0)}";
       }
 
       goalsText +=
-          "- $name: Target: ₹${target.toStringAsFixed(0)}, Saved: ₹${saved.toStringAsFixed(0)}, Remaining: ₹${remaining.toStringAsFixed(0)}$optionalCalculations\n";
+          "- $name: Target: $currencySymbol${target.toStringAsFixed(0)}, Saved: $currencySymbol${saved.toStringAsFixed(0)}, Remaining: $currencySymbol${remaining.toStringAsFixed(0)}$optionalCalculations\n";
     }
 
     return """
 User financial data:
-Monthly income: ₹${income.toStringAsFixed(0)}
-Monthly expenses: ₹${expenses.toStringAsFixed(0)}
-Overall Savings balance: ₹${savings.toStringAsFixed(0)}
+Monthly income: $currencySymbol${income.toStringAsFixed(0)}
+Monthly expenses: $currencySymbol${expenses.toStringAsFixed(0)}
+Overall Savings balance: $currencySymbol${savings.toStringAsFixed(0)}
 Calculated Savings Rate: $savingsRate %
 
 Active Goals:
@@ -162,7 +163,7 @@ Instructions:
 
     if (currentSavings < (totalExpenses * 3)) {
       buffer.writeln(
-        "• Prioritize building an emergency fund of at least ₹${(totalExpenses * 3).toStringAsFixed(0)} (3 months of expenses).",
+        "• Prioritize building an emergency fund of at least $currencySymbol${(totalExpenses * 3).toStringAsFixed(0)} (3 months of expenses).",
       );
     }
 
@@ -180,7 +181,7 @@ Instructions:
                     (topGoal["currentSavings"] as num))
                 .toDouble();
         buffer.writeln(
-          "• Focus on completing your '${topGoal['name']}' goal. You only need ₹${remaining.toStringAsFixed(0)} more.",
+          "• Focus on completing your '${topGoal['name']}' goal. You only need $currencySymbol${remaining.toStringAsFixed(0)} more.",
         );
       }
     }

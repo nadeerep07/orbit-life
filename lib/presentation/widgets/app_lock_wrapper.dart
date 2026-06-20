@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:hive_flutter/hive_flutter.dart';
+import 'package:provider/provider.dart';
 import '../../core/services/local_auth_service.dart';
+import '../viewmodels/settings_view_model.dart';
 
 class AppLockWrapper extends StatefulWidget {
   final Widget child;
@@ -15,13 +16,11 @@ class _AppLockWrapperState extends State<AppLockWrapper>
     with WidgetsBindingObserver {
   bool _isAuthenticated = false;
   bool _isAuthenticating = false;
-  late Box _settingsBox;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _settingsBox = Hive.box('settingsBox');
     _checkInitialAuth();
   }
 
@@ -46,7 +45,11 @@ class _AppLockWrapperState extends State<AppLockWrapper>
   }
 
   bool _isAppLockEnabled() {
-    return _settingsBox.get('app_lock_enabled', defaultValue: false) as bool;
+    try {
+      return context.read<SettingsViewModel>().settings.enableBiometrics;
+    } catch (_) {
+      return false;
+    }
   }
 
   Future<void> _checkInitialAuth() async {

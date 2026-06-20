@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../theme/app_theme.dart';
 import '../viewmodels/accounts_view_model.dart';
+import '../../core/utils/currency_formatter.dart';
 
 class AccountsScreen extends StatelessWidget {
   const AccountsScreen({super.key});
@@ -28,7 +29,7 @@ class AccountsScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    '₹${accountsVM.totalBalance.toStringAsFixed(2)}',
+                    '$currencySymbol${accountsVM.totalBalance.toStringAsFixed(2)}',
                     style: TextStyle(
                       fontSize: 32,
                       fontWeight: FontWeight.bold,
@@ -80,7 +81,7 @@ class AccountsScreen extends StatelessWidget {
           ),
         ),
         title: Text(name, style: const TextStyle(fontWeight: FontWeight.w600)),
-        subtitle: Text('Balance: ₹${balance.toStringAsFixed(2)}'),
+        subtitle: Text('Balance: $currencySymbol${balance.toStringAsFixed(2)}'),
         trailing: IconButton(
           icon: Icon(
             Icons.add_circle_outline,

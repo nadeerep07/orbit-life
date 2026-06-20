@@ -1,9 +1,15 @@
 import 'package:flutter/material.dart';
 import '../../domain/entities/account_entity.dart';
+import '../../domain/entities/transaction_entity.dart';
 import '../../domain/repositories/account_repository.dart';
+import '../../domain/repositories/transaction_repository.dart';
+
+import 'package:hive/hive.dart';
+import '../../data/models/account_model.dart';
 
 class AccountsViewModel extends ChangeNotifier {
   final AccountRepository _accountRepository;
+  final TransactionRepository _transactionRepository;
 
   List<AccountEntity> _accounts = [];
   List<AccountEntity> get accounts => _accounts;
@@ -11,11 +17,17 @@ class AccountsViewModel extends ChangeNotifier {
   bool _isLoading = false;
   bool get isLoading => _isLoading;
 
-  AccountsViewModel(this._accountRepository);
+  AccountsViewModel(this._accountRepository, this._transactionRepository) {
+    Hive.box<AccountModel>('accounts').watch().listen((event) {
+      loadAccounts(silent: true);
+    });
+  }
 
-  Future<void> loadAccounts() async {
-    _isLoading = true;
-    notifyListeners();
+  Future<void> loadAccounts({bool silent = false}) async {
+    if (!silent) {
+      _isLoading = true;
+      notifyListeners();
+    }
 
     _accounts = await _accountRepository.getAccounts();
 
@@ -50,13 +62,18 @@ class AccountsViewModel extends ChangeNotifier {
   Future<void> updateAccountBalance(String id, double difference) async {
     final accountIndex = _accounts.indexWhere((acc) => acc.id == id);
     if (accountIndex != -1) {
-      final acc = _accounts[accountIndex];
-      final newAcc = AccountEntity(
-        id: acc.id,
-        name: acc.name,
-        openingBalance: acc.openingBalance + difference,
+      // Log this as a balance adjustment transaction so the audit history is correct
+      final tx = TransactionEntity(
+        id: 'adj_${DateTime.now().millisecondsSinceEpoch}',
+        amount: difference.abs(),
+        type: difference > 0 ? TransactionType.income : TransactionType.expense,
+        accountId: id,
+        categoryOrSource: 'Balance Adjustment',
+        date: DateTime.now(),
+        description: 'Manual balance adjustment',
+        referenceId: 'manual_adjustment',
       );
-      await _accountRepository.updateAccount(newAcc);
+      await _transactionRepository.addTransaction(tx);
       await loadAccounts();
     }
   }
