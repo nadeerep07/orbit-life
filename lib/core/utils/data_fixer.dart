@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:hive/hive.dart';
 import '../../data/datasources/local_data_source.dart';
 import '../../domain/repositories/transaction_repository.dart';
@@ -47,7 +48,7 @@ class DataFixer {
           }
         }
       } catch (e) {
-        print('Error fixing BorrowLendTransactions: $e');
+        debugPrint('Error fixing BorrowLendTransactions: $e');
       }
       await settingsBox.put('data_fixer_v1', true);
     }
@@ -202,7 +203,35 @@ class DataFixer {
         // 8. Mark migration complete
         await settingsBox.put('migration_v2_completed', true);
       } catch (e) {
-        print('Error migrating legacy database records: $e');
+        debugPrint('Error migrating legacy database records: $e');
+      }
+    }
+
+    // 3. Run Settings & Allocation V3 Migration: Ensure allocation & budget defaults are initialized safely
+    final bool isMigrationV3Completed = settingsBox.get(
+      'migration_v3_completed',
+      defaultValue: false,
+    );
+
+    if (!isMigrationV3Completed) {
+      try {
+        final settings = await localDataSource.getSettings();
+        if (settings != null) {
+          bool needsUpdate = false;
+          // Ensure auto allocation flag is set
+          if (settings.enableAutoAllocation == null) {
+            needsUpdate = true;
+          }
+          if (needsUpdate) {
+            final updated = settings.copyWith(
+              enableAutoAllocation: settings.enableAutoAllocation ?? true,
+            );
+            await localDataSource.saveSettings(updated);
+          }
+        }
+        await settingsBox.put('migration_v3_completed', true);
+      } catch (e) {
+        debugPrint('Error running V3 migration: $e');
       }
     }
   }

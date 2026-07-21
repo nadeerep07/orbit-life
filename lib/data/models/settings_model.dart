@@ -65,6 +65,40 @@ class SettingsModel extends HiveObject {
     this.securityPin = '',
   });
 
+  SettingsModel copyWith({
+    String? currencyCode,
+    String? currencySymbol,
+    double? monthlyBudgetLimit,
+    Map<String, double>? categoryBudgets,
+    double? savingsGoal,
+    double? emergencyFundGoal,
+    bool? enableNotifications,
+    String? backupFrequency,
+    bool? enableAutoAllocation,
+    String? financialMode,
+    List<String>? customModePriorities,
+    bool? dailyLimitRollover,
+    bool? enableBiometrics,
+    String? securityPin,
+  }) {
+    return SettingsModel(
+      currencyCode: currencyCode ?? this.currencyCode,
+      currencySymbol: currencySymbol ?? this.currencySymbol,
+      monthlyBudgetLimit: monthlyBudgetLimit ?? this.monthlyBudgetLimit,
+      categoryBudgets: categoryBudgets ?? this.categoryBudgets,
+      savingsGoal: savingsGoal ?? this.savingsGoal,
+      emergencyFundGoal: emergencyFundGoal ?? this.emergencyFundGoal,
+      enableNotifications: enableNotifications ?? this.enableNotifications,
+      backupFrequency: backupFrequency ?? this.backupFrequency,
+      enableAutoAllocation: enableAutoAllocation ?? this.enableAutoAllocation,
+      financialMode: financialMode ?? this.financialMode,
+      customModePriorities: customModePriorities ?? this.customModePriorities,
+      dailyLimitRollover: dailyLimitRollover ?? this.dailyLimitRollover,
+      enableBiometrics: enableBiometrics ?? this.enableBiometrics,
+      securityPin: securityPin ?? this.securityPin,
+    );
+  }
+
   factory SettingsModel.fromEntity(SettingsEntity entity) {
     return SettingsModel(
       currencyCode: entity.currencyCode,
