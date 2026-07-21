@@ -64,4 +64,15 @@ class TransferModel extends HiveObject {
       'description': description,
     };
   }
+
+  factory TransferModel.fromJson(Map<String, dynamic> json) {
+    return TransferModel(
+      id: json['id'] as String,
+      fromAccountId: json['fromAccountId'] as String,
+      toAccountId: json['toAccountId'] as String,
+      amount: (json['amount'] as num).toDouble(),
+      date: DateTime.parse(json['date'] as String),
+      description: json['description'] as String? ?? '',
+    );
+  }
 }

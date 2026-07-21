@@ -5,6 +5,7 @@ import '../theme/app_theme.dart';
 import '../viewmodels/emi_tracker_view_model.dart';
 import '../../domain/entities/emi_tracker_entity.dart';
 import 'add_emi_screen.dart';
+import '../widgets/custom_snackbar.dart';
 
 class EmiTrackerScreen extends StatefulWidget {
   const EmiTrackerScreen({super.key});
@@ -51,8 +52,10 @@ class _EmiTrackerScreenState extends State<EmiTrackerScreen> {
                   ),
                   onDismissed: (_) {
                     vm.deleteEmi(emi.id);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text("${emi.title} deleted")),
+                    AppSnackBar.show(
+                      context,
+                      message: "${emi.title} deleted",
+                      isError: false,
                     );
                   },
                   child: Padding(

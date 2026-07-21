@@ -35,6 +35,19 @@ import 'data/models/transfer_model.dart';
 import 'data/repositories/transfer_repository_impl.dart';
 import 'presentation/viewmodels/transfer_view_model.dart';
 
+import 'features/credit_card/data/models/fd_lot_model.dart';
+import 'features/credit_card/data/models/credit_card_account_model.dart';
+import 'features/credit_card/data/models/credit_card_statement_model.dart';
+import 'features/credit_card/data/models/cashback_transaction_model.dart';
+import 'features/credit_card/data/datasources/credit_card_local_data_source.dart';
+import 'features/credit_card/domain/repositories/credit_card_repository.dart';
+import 'features/credit_card/data/repositories/credit_card_repository_impl.dart';
+import 'features/credit_card/presentation/blocs/credit_card_bloc.dart';
+import 'features/credit_card/presentation/blocs/fd_lots_bloc.dart';
+import 'features/credit_card/presentation/blocs/statement_bloc.dart';
+import 'features/credit_card/presentation/blocs/cashback_bloc.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+
 import 'data/models/goal_model.dart';
 import 'data/repositories/goal_repository_impl.dart';
 import 'presentation/viewmodels/goals_view_model.dart';
@@ -111,11 +124,18 @@ void main() async {
   Hive.registerAdapter(InvestmentModelAdapter());
   Hive.registerAdapter(TransactionModelAdapter());
   Hive.registerAdapter(SettingsModelAdapter());
+  Hive.registerAdapter(FdLotModelAdapter());
+  Hive.registerAdapter(CreditCardAccountModelAdapter());
+  Hive.registerAdapter(CreditCardStatementModelAdapter());
+  Hive.registerAdapter(CashbackTransactionModelAdapter());
   await Hive.openBox('settingsBox'); // Initialize settingsBox
 
   // Data Sources & Repositories
   final localDataSource = HiveDataSourceImpl();
   await localDataSource.init();
+
+  final creditCardDataSource = CreditCardLocalDataSourceImpl();
+  await creditCardDataSource.init();
 
   final settingsRepository = SettingsRepositoryImpl(localDataSource);
   final settings = await settingsRepository.getSettings();
@@ -137,6 +157,10 @@ void main() async {
   final borrowLendRepository = BorrowLendRepositoryImpl(localDataSource);
   final investmentRepository = InvestmentRepositoryImpl(localDataSource);
   final transactionRepository = TransactionRepositoryImpl(localDataSource);
+  final creditCardRepository = CreditCardRepositoryImpl(
+    localDataSource: creditCardDataSource,
+    transactionRepository: transactionRepository,
+  );
 
   // 🛠 Run one-time data fixes and balance resync
   await DataFixer.runFixes(localDataSource, transactionRepository);
@@ -154,9 +178,16 @@ void main() async {
           create: (context) =>
               BudgetViewModel(categoryRepository)
                 ..loadCategories(context.read<MonthViewModel>().currentMonth),
-          update: (context, monthVM, previous) =>
-              (previous ?? BudgetViewModel(categoryRepository))
-                ..loadCategories(monthVM.currentMonth),
+          update: (context, monthVM, previous) {
+            final vm = previous ?? BudgetViewModel(categoryRepository);
+            // Only reload if the month actually changed to prevent feedback loops
+            if (vm.lastLoadedMonth == null ||
+                vm.lastLoadedMonth!.month != monthVM.currentMonth.month ||
+                vm.lastLoadedMonth!.year != monthVM.currentMonth.year) {
+              vm.loadCategories(monthVM.currentMonth);
+            }
+            return vm;
+          },
         ),
         ChangeNotifierProvider(
           create: (_) => ExpenseViewModel(expenseRepository, transactionRepository)..loadExpenses(),
@@ -211,6 +242,19 @@ void main() async {
         ChangeNotifierProvider(
           create: (_) =>
               AccountDetailViewModel(repository: transactionRepository),
+        ),
+        Provider<CreditCardRepository>.value(value: creditCardRepository),
+        BlocProvider(
+          create: (_) => CreditCardBloc(repository: creditCardRepository)..add(LoadCreditCardAccountEvent()),
+        ),
+        BlocProvider(
+          create: (_) => FdLotsBloc(repository: creditCardRepository)..add(LoadFdLotsEvent()),
+        ),
+        BlocProvider(
+          create: (_) => StatementBloc(repository: creditCardRepository)..add(LoadStatementsEvent()),
+        ),
+        BlocProvider(
+          create: (_) => CashbackBloc(repository: creditCardRepository)..add(LoadCashbackEvent()),
         ),
       ],
       child: const AppLockWrapper(child: MyBudgetApp()),

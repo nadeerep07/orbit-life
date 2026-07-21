@@ -7,6 +7,7 @@ import '../theme/app_theme.dart';
 import '../viewmodels/service_view_model.dart';
 import '../viewmodels/accounts_view_model.dart';
 import 'services_history_screen.dart';
+import '../widgets/custom_snackbar.dart';
 
 class ServiceTrackerScreen extends StatefulWidget {
   final ServiceEntity? existingService;
@@ -268,11 +269,10 @@ class _ServiceTrackerScreenState extends State<ServiceTrackerScreen> {
 
     if (title.isEmpty || mileage <= 0) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text('Please enter valid title and current mileage'),
-            backgroundColor: Theme.of(context).colorScheme.error,
-          ),
+        AppSnackBar.show(
+          context,
+          message: 'Please enter valid title and current mileage',
+          isError: true,
         );
       }
       return;

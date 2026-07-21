@@ -83,4 +83,36 @@ class InvestmentModel extends HiveObject {
       accountId: accountId,
     );
   }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'name': name,
+      'type': type,
+      'investedAmount': investedAmount,
+      'currentValue': currentValue,
+      'quantity': quantity,
+      'buyPrice': buyPrice,
+      'date': date.toIso8601String(),
+      'notes': notes,
+      'interestRate': interestRate,
+      'accountId': accountId,
+    };
+  }
+
+  factory InvestmentModel.fromJson(Map<String, dynamic> json) {
+    return InvestmentModel(
+      id: json['id'] as String,
+      name: json['name'] as String,
+      type: json['type'] as String,
+      investedAmount: (json['investedAmount'] as num).toDouble(),
+      currentValue: (json['currentValue'] as num).toDouble(),
+      quantity: json['quantity'] != null ? (json['quantity'] as num).toDouble() : null,
+      buyPrice: json['buyPrice'] != null ? (json['buyPrice'] as num).toDouble() : null,
+      date: DateTime.parse(json['date'] as String),
+      notes: (json['notes'] as String?) ?? '',
+      interestRate: json['interestRate'] != null ? (json['interestRate'] as num).toDouble() : null,
+      accountId: (json['accountId'] as String?) ?? 'cash',
+    );
+  }
 }

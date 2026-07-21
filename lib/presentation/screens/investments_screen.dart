@@ -5,6 +5,7 @@ import '../viewmodels/investment_view_model.dart';
 import '../../core/utils/app_routes.dart';
 import '../../domain/entities/investment_entity.dart';
 import 'investment_detail_screen.dart';
+import '../widgets/custom_snackbar.dart';
 
 class InvestmentsScreen extends StatefulWidget {
   const InvestmentsScreen({super.key});
@@ -179,9 +180,11 @@ class _InvestmentsScreenState extends State<InvestmentsScreen> {
       ),
       onDismissed: (_) {
         viewModel.deleteInvestment(inv.id);
-        ScaffoldMessenger.of(
+        AppSnackBar.show(
           context,
-        ).showSnackBar(const SnackBar(content: Text('Investment deleted')));
+          message: 'Investment deleted',
+          isError: false,
+        );
       },
       child: GestureDetector(
         onTap: () {

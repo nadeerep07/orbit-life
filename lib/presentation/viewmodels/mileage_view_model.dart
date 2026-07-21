@@ -8,7 +8,6 @@ import 'accounts_view_model.dart';
 class MileageViewModel extends ChangeNotifier {
   final MileageRepository _repository;
   final ExpenseViewModel _expenseViewModel;
-  final AccountsViewModel _accountsViewModel;
 
   List<MileageEntryEntity> _entries = [];
   List<MileageEntryEntity> get entries => _entries;
@@ -16,7 +15,7 @@ class MileageViewModel extends ChangeNotifier {
   MileageViewModel(
     this._repository,
     this._expenseViewModel,
-    this._accountsViewModel,
+    AccountsViewModel? accountsViewModel,
   );
 
   Future<void> loadEntries() async {

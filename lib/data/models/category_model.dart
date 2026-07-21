@@ -64,4 +64,15 @@ class CategoryModel extends HiveObject {
       'year': year,
     };
   }
+
+  factory CategoryModel.fromJson(Map<String, dynamic> json) {
+    return CategoryModel(
+      id: json['id'] as String,
+      name: json['name'] as String,
+      monthlyBudget: (json['monthlyBudget'] as num).toDouble(),
+      isCustom: json['isCustom'] as bool? ?? true,
+      month: json['month'] as int?,
+      year: json['year'] as int?,
+    );
+  }
 }

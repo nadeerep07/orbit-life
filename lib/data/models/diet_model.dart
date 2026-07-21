@@ -74,6 +74,18 @@ class DietProfileModel extends HiveObject {
       'dailyCalorieTarget': dailyCalorieTarget,
     };
   }
+
+  factory DietProfileModel.fromJson(Map<String, dynamic> json) {
+    return DietProfileModel(
+      weightKg: (json['weightKg'] as num).toDouble(),
+      heightCm: (json['heightCm'] as num).toDouble(),
+      age: (json['age'] as num).toInt(),
+      gender: json['gender'] as String,
+      activityLevel: json['activityLevel'] as String,
+      goal: json['goal'] as String,
+      dailyCalorieTarget: (json['dailyCalorieTarget'] as num).toInt(),
+    );
+  }
 }
 
 // -----------------------------------------------------------------
@@ -153,5 +165,18 @@ class MealEntryModel extends HiveObject {
       'date': date.toIso8601String(),
       'mealType': mealType,
     };
+  }
+
+  factory MealEntryModel.fromJson(Map<String, dynamic> json) {
+    return MealEntryModel(
+      id: json['id'] as String,
+      name: json['name'] as String,
+      calories: (json['calories'] as num).toInt(),
+      protein: (json['protein'] as num).toDouble(),
+      carbs: (json['carbs'] as num).toDouble(),
+      fat: (json['fat'] as num).toDouble(),
+      date: DateTime.parse(json['date'] as String),
+      mealType: json['mealType'] as String,
+    );
   }
 }

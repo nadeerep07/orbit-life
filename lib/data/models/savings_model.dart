@@ -39,4 +39,12 @@ class SavingsModel extends HiveObject {
   Map<String, dynamic> toJson() {
     return {'id': id, 'totalAdded': totalAdded, 'totalDebited': totalDebited};
   }
+
+  factory SavingsModel.fromJson(Map<String, dynamic> json) {
+    return SavingsModel(
+      id: json['id'] as String,
+      totalAdded: (json['totalAdded'] as num).toDouble(),
+      totalDebited: (json['totalDebited'] as num).toDouble(),
+    );
+  }
 }

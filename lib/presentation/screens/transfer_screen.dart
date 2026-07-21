@@ -8,6 +8,7 @@ import '../viewmodels/savings_view_model.dart';
 import '../viewmodels/transfer_view_model.dart';
 import '../../core/utils/currency_formatter.dart';
 import 'transfer_history_screen.dart';
+import '../widgets/custom_snackbar.dart';
 
 class TransferScreen extends StatefulWidget {
   const TransferScreen({super.key});
@@ -247,20 +248,21 @@ class _TransferScreenState extends State<TransferScreen> {
     await transferVM.addTransfer(transfer);
 
     if (mounted) {
-      ScaffoldMessenger.of(
+      AppSnackBar.show(
         context,
-      ).showSnackBar(const SnackBar(content: Text('Transfer successful!')));
+        message: 'Transfer successful!',
+        isError: false,
+      );
       Navigator.pop(context);
     }
   }
 
   void _showError(String msg) {
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(msg),
-          backgroundColor: Theme.of(context).colorScheme.error,
-        ),
+      AppSnackBar.show(
+        context,
+        message: msg,
+        isError: true,
       );
     }
   }

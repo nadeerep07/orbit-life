@@ -120,4 +120,23 @@ class EmiTrackerModel extends HiveObject {
       'accountId': accountId,
     };
   }
+
+  factory EmiTrackerModel.fromJson(Map<String, dynamic> json) {
+    return EmiTrackerModel(
+      id: json['id'] as String,
+      title: json['title'] as String,
+      provider: json['provider'] as String,
+      totalAmount: (json['totalAmount'] as num).toDouble(),
+      monthlyEmi: ((json['monthlyEmi'] ?? 0) as num).toDouble(),
+      totalMonths: (json['totalMonths'] ?? 0) as int,
+      paidMonths: (json['paidMonths'] ?? 0) as int,
+      startDate: DateTime.parse(json['startDate'] as String),
+      notes: (json['notes'] as String?) ?? '',
+      isPayLater: (json['isPayLater'] as bool?) ?? false,
+      dueDate: json['dueDate'] != null ? DateTime.parse(json['dueDate'] as String) : null,
+      isPaid: (json['isPaid'] as bool?) ?? false,
+      isReminderEnabled: (json['isReminderEnabled'] as bool?) ?? false,
+      accountId: (json['accountId'] as String?) ?? 'cash',
+    );
+  }
 }

@@ -5,7 +5,7 @@ import 'package:intl/intl.dart';
 import '../../domain/entities/diet_entity.dart';
 import '../theme/app_theme.dart';
 import '../viewmodels/diet_view_model.dart';
-
+import '../widgets/custom_snackbar.dart';
 class AddMealScreen extends StatefulWidget {
   const AddMealScreen({super.key});
 
@@ -177,11 +177,10 @@ class _AddMealScreenState extends State<AddMealScreen> {
     final calories = int.tryParse(_caloriesController.text) ?? 0;
 
     if (name.isEmpty || calories <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('Please provide a valid meal name and calories'),
-          backgroundColor: Theme.of(context).colorScheme.error,
-        ),
+      AppSnackBar.show(
+        context,
+        message: 'Please provide a valid meal name and calories',
+        isError: true,
       );
       return;
     }
@@ -205,9 +204,11 @@ class _AddMealScreenState extends State<AddMealScreen> {
     final food = _nameController.text.trim();
 
     if (food.isEmpty) {
-      ScaffoldMessenger.of(
+      AppSnackBar.show(
         context,
-      ).showSnackBar(const SnackBar(content: Text("Enter food name first")));
+        message: "Enter food name first",
+        isError: true,
+      );
       return;
     }
 
@@ -230,9 +231,11 @@ class _AddMealScreenState extends State<AddMealScreen> {
     } catch (e) {
       Navigator.pop(context);
 
-      ScaffoldMessenger.of(
+      AppSnackBar.show(
         context,
-      ).showSnackBar(SnackBar(content: Text("AI estimation failed: $e")));
+        message: "AI estimation failed: $e",
+        isError: true,
+      );
     }
   }
 }
