@@ -150,21 +150,33 @@ class DashboardScreen extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 child: Row(
                   children: [
-                    CircleAvatar(
-                      radius: 20,
-                      backgroundImage: user != null && user.photoUrl != null
-                          ? NetworkImage(user.photoUrl!)
-                          : null,
-                      backgroundColor: Theme.of(context).colorScheme.primary.withOpacity(0.12),
-                      child: user == null || user.photoUrl == null
-                          ? Text(
-                              userName[0].toUpperCase(),
-                              style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                color: Theme.of(context).colorScheme.primary,
-                              ),
-                            )
-                          : null,
+                    Container(
+                      padding: const EdgeInsets.all(2),
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        gradient: LinearGradient(
+                          colors: [
+                            Theme.of(context).colorScheme.primary,
+                            Theme.of(context).colorScheme.secondary,
+                          ],
+                        ),
+                      ),
+                      child: CircleAvatar(
+                        radius: 20,
+                        backgroundImage: user != null && user.photoUrl != null
+                            ? NetworkImage(user.photoUrl!)
+                            : null,
+                        backgroundColor: Theme.of(context).cardColor,
+                        child: user == null || user.photoUrl == null
+                            ? Text(
+                                userName[0].toUpperCase(),
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  color: Theme.of(context).colorScheme.primary,
+                                ),
+                              )
+                            : null,
+                      ),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
@@ -173,19 +185,23 @@ class DashboardScreen extends StatelessWidget {
                         children: [
                           Text(
                             _getGreeting(),
-                            style: const TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.w500),
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+                              fontWeight: FontWeight.w500,
+                            ),
                           ),
                           Text(
                             userName,
-                            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                            style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
                             overflow: TextOverflow.ellipsis,
                           ),
                         ],
                       ),
                     ),
-                    IconButton(
-                      icon: const Icon(Icons.calendar_month_outlined),
-                      onPressed: () async {
+                    // Month selector pill
+                    InkWell(
+                      onTap: () async {
                         final selectedDate = await showMonthPicker(
                           context,
                           monthVM.currentMonth,
@@ -194,33 +210,71 @@ class DashboardScreen extends StatelessWidget {
                           monthVM.changeMonth(selectedDate);
                         }
                       },
+                      borderRadius: BorderRadius.circular(20),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(
+                            color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.15),
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.calendar_today_rounded,
+                              size: 14,
+                              color: Theme.of(context).colorScheme.primary,
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              DateFormat('MMM yyyy').format(now),
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                                color: Theme.of(context).colorScheme.primary,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     ),
-                    IconButton(
-                      icon: const Icon(Icons.settings_outlined),
-                      onPressed: () => Navigator.pushNamed(context, AppRoutes.setting),
+                    const SizedBox(width: 8),
+                    Container(
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).dividerColor.withValues(alpha: 0.06),
+                        shape: BoxShape.circle,
+                      ),
+                      child: IconButton(
+                        icon: const Icon(Icons.settings_outlined, size: 20),
+                        onPressed: () => Navigator.pushNamed(context, AppRoutes.setting),
+                      ),
                     ),
                   ],
                 ),
               ),
 
-              // ── Dynamic Daily Limit & Wallet Card ────────────────────────
+              // ── Dynamic Daily Limit & Wallet Card (Hero Card) ────────────────────────
               Container(
                 margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                padding: const EdgeInsets.all(24),
+                padding: const EdgeInsets.all(22),
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
                     colors: [
                       Theme.of(context).colorScheme.primary,
-                      Theme.of(context).colorScheme.primary.withOpacity(0.85),
+                      Theme.of(context).colorScheme.primary.withValues(alpha: 0.82),
+                      Theme.of(context).colorScheme.secondary.withValues(alpha: 0.9),
                     ],
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                   ),
-                  borderRadius: BorderRadius.circular(24),
+                  borderRadius: BorderRadius.circular(26),
                   boxShadow: [
                     BoxShadow(
-                      color: Theme.of(context).colorScheme.primary.withOpacity(0.25),
-                      blurRadius: 15,
+                      color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.3),
+                      blurRadius: 18,
                       offset: const Offset(0, 8),
                     ),
                   ],
@@ -231,58 +285,110 @@ class DashboardScreen extends StatelessWidget {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Text(
-                          "TODAY'S SAFE SPENDING LIMIT",
-                          style: TextStyle(
-                            color: Colors.white70,
-                            fontSize: 10,
-                            fontWeight: FontWeight.bold,
-                            letterSpacing: 1.2,
-                          ),
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(6),
+                              decoration: BoxDecoration(
+                                color: Colors.white24,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: const Icon(Icons.account_balance_wallet_rounded, color: Colors.white, size: 14),
+                            ),
+                            const SizedBox(width: 8),
+                            const Text(
+                              "SAFE DAILY SPENDING LIMIT",
+                              style: TextStyle(
+                                color: Colors.white70,
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                                letterSpacing: 1.1,
+                              ),
+                            ),
+                          ],
                         ),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                           decoration: BoxDecoration(
-                            color: Colors.white24,
-                            borderRadius: BorderRadius.circular(8),
+                            color: Colors.white.withValues(alpha: 0.22),
+                            borderRadius: BorderRadius.circular(12),
                           ),
                           child: Text(
                             settings.financialMode.toUpperCase(),
                             style: const TextStyle(
                               color: Colors.white,
-                              fontSize: 9,
+                              fontSize: 10,
                               fontWeight: FontWeight.bold,
                             ),
                           ),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 8),
-                    Text(
-                      '$currencySymbol${dailySpendingReport.dailyLimit.toStringAsFixed(0)}',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 36,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: -0.5,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 14),
                     Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      crossAxisAlignment: CrossAxisAlignment.baseline,
+                      textBaseline: TextBaseline.alphabetic,
                       children: [
                         Text(
-                          'Weekly Limit: $currencySymbol${dailySpendingReport.weeklyLimit.toStringAsFixed(0)}',
-                          style: const TextStyle(color: Colors.white70, fontSize: 12),
+                          '$currencySymbol${dailySpendingReport.dailyLimit.toStringAsFixed(0)}',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 38,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: -0.5,
+                          ),
                         ),
-                        Text(
-                          'Wallet: $currencySymbol${totalBalance.toStringAsFixed(0)}',
-                          style: const TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.bold),
+                        const SizedBox(width: 6),
+                        const Text(
+                          '/ day',
+                          style: TextStyle(color: Colors.white70, fontSize: 15, fontWeight: FontWeight.w500),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    // Spending progress bar
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(6),
+                          child: LinearProgressIndicator(
+                            value: (spendableWallet.totalSpendableAmount > 0
+                                    ? (totalSpent / spendableWallet.totalSpendableAmount)
+                                    : 0.0)
+                                .clamp(0.0, 1.0),
+                            minHeight: 6,
+                            backgroundColor: Colors.white24,
+                            valueColor: const AlwaysStoppedAnimation<Color>(Colors.white),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              'Spent: $currencySymbol${totalSpent.toStringAsFixed(0)}',
+                              style: const TextStyle(color: Colors.white70, fontSize: 11),
+                            ),
+                            Text(
+                              'Wallet: $currencySymbol${totalBalance.toStringAsFixed(0)}',
+                              style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                            ),
+                          ],
                         ),
                       ],
                     ),
                   ],
                 ),
+              ),
+
+              // ── Quick Financial Metrics Row ────────────────────────────
+              _buildFinancialMetricsRow(
+                context,
+                income: totalIncome,
+                expenses: totalSpent,
+                savings: actualSavings,
+                obligations: obligationsAnalysis.totalObligations,
               ),
 
               // ── Smart Dynamic Insights Carousel ────────────────────────────
@@ -303,9 +409,136 @@ class DashboardScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildSmartInsightsCarousel(BuildContext context, HealthReport report) {
+  Widget _buildFinancialMetricsRow(
+    BuildContext context, {
+    required double income,
+    required double expenses,
+    required double savings,
+    required double obligations,
+  }) {
     return Container(
-      height: 70,
+      height: 95,
+      margin: const EdgeInsets.symmetric(vertical: 4),
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        children: [
+          _buildMetricCard(
+            context,
+            title: 'Income',
+            amount: income,
+            icon: Icons.south_west_rounded,
+            iconColor: Colors.green,
+            bgColor: Colors.green.withValues(alpha: 0.08),
+            onTap: () => Navigator.pushNamed(context, AppRoutes.income),
+          ),
+          _buildMetricCard(
+            context,
+            title: 'Expenses',
+            amount: expenses,
+            icon: Icons.north_east_rounded,
+            iconColor: Colors.redAccent,
+            bgColor: Colors.redAccent.withValues(alpha: 0.08),
+            onTap: () => Navigator.pushNamed(context, AppRoutes.allExpenses),
+          ),
+          _buildMetricCard(
+            context,
+            title: 'Savings',
+            amount: savings,
+            icon: Icons.savings_rounded,
+            iconColor: Colors.teal,
+            bgColor: Colors.teal.withValues(alpha: 0.08),
+            onTap: () => Navigator.pushNamed(context, AppRoutes.savings),
+          ),
+          _buildMetricCard(
+            context,
+            title: 'Obligations',
+            amount: obligations,
+            icon: Icons.receipt_long_rounded,
+            iconColor: Colors.orange,
+            bgColor: Colors.orange.withValues(alpha: 0.08),
+            onTap: () => Navigator.pushNamed(context, AppRoutes.emiCalculator),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMetricCard(
+    BuildContext context, {
+    required String title,
+    required double amount,
+    required IconData icon,
+    required Color iconColor,
+    required Color bgColor,
+    required VoidCallback onTap,
+  }) {
+    return Container(
+      width: 145,
+      margin: const EdgeInsets.only(right: 10),
+      child: Card(
+        elevation: 0,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(18),
+          side: BorderSide(color: Theme.of(context).dividerColor.withValues(alpha: 0.06)),
+        ),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(18),
+          child: Padding(
+            padding: const EdgeInsets.all(10),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    Container(
+                      padding: const EdgeInsets.all(4),
+                      decoration: BoxDecoration(
+                        color: bgColor,
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(icon, color: iconColor, size: 14),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  '$currencySymbol${amount.toStringAsFixed(0)}',
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.bold,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSmartInsightsCarousel(BuildContext context, HealthReport report) {
+    if (report.improvements.isEmpty) return const SizedBox.shrink();
+    return Container(
+      height: 72,
       margin: const EdgeInsets.only(top: 8, bottom: 8),
       child: ListView.builder(
         scrollDirection: Axis.horizontal,
@@ -313,18 +546,25 @@ class DashboardScreen extends StatelessWidget {
         itemCount: report.improvements.length,
         itemBuilder: (ctx, idx) {
           return Container(
-            width: 280,
+            width: 290,
             margin: const EdgeInsets.only(right: 12),
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.primary.withOpacity(0.05),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: Theme.of(context).colorScheme.primary.withOpacity(0.12)),
+              color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.05),
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.12)),
             ),
             child: Row(
               children: [
-                Icon(Icons.lightbulb_outline, color: Theme.of(context).colorScheme.primary, size: 20),
-                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(Icons.auto_awesome, color: Theme.of(context).colorScheme.primary, size: 18),
+                ),
+                const SizedBox(width: 10),
                 Expanded(
                   child: Text(
                     report.improvements[idx],
@@ -342,50 +582,81 @@ class DashboardScreen extends StatelessWidget {
   }
 
   Widget _buildHealthGaugeCard(BuildContext context, HealthReport report) {
+    final statusColor = report.score >= 80
+        ? Colors.green
+        : (report.score >= 50 ? Colors.orange : Colors.redAccent);
+    final statusLabel = report.score >= 80
+        ? 'Optimal'
+        : (report.score >= 50 ? 'Stable' : 'Needs Action');
+
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       elevation: 0,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(20),
-        side: BorderSide(color: Theme.of(context).dividerColor.withOpacity(0.08)),
+        borderRadius: BorderRadius.circular(22),
+        side: BorderSide(color: Theme.of(context).dividerColor.withValues(alpha: 0.08)),
       ),
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(18),
         child: Row(
           children: [
             Stack(
               alignment: Alignment.center,
               children: [
                 SizedBox(
-                  width: 60,
-                  height: 60,
+                  width: 64,
+                  height: 64,
                   child: CircularProgressIndicator(
                     value: report.score / 100,
-                    strokeWidth: 6,
-                    backgroundColor: Colors.grey.withOpacity(0.12),
-                    valueColor: AlwaysStoppedAnimation<Color>(
-                      report.score >= 80 
-                          ? Colors.green 
-                          : (report.score >= 50 ? Colors.orange : Colors.red),
-                    ),
+                    strokeWidth: 7,
+                    backgroundColor: Theme.of(context).dividerColor.withValues(alpha: 0.1),
+                    valueColor: AlwaysStoppedAnimation<Color>(statusColor),
                   ),
                 ),
-                Text(
-                  '${report.score}',
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      '${report.score}',
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 17),
+                    ),
+                    const Text(
+                      '/100',
+                      style: TextStyle(fontSize: 9, color: Colors.grey),
+                    ),
+                  ],
                 ),
               ],
             ),
-            const SizedBox(width: 16),
+            const SizedBox(width: 18),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('FINANCIAL HEALTH SCORE', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey)),
-                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      const Text(
+                        'FINANCIAL HEALTH',
+                        style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1.1, color: Colors.grey),
+                      ),
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: statusColor.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          statusLabel,
+                          style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: statusColor),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
                   Text(
                     report.feedback.firstOrNull ?? 'Keep tracking obligations and savings targets.',
-                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, height: 1.2),
                   ),
                 ],
               ),
@@ -398,7 +669,7 @@ class DashboardScreen extends StatelessWidget {
 
   Widget _buildGroupedModules(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -419,14 +690,14 @@ class DashboardScreen extends StatelessWidget {
             mainAxisSpacing: 16,
             crossAxisSpacing: 16,
             children: [
-              _buildFeatureTile(context, Icons.account_balance_wallet, 'Accounts', AppRoutes.accounts),
-              _buildFeatureTile(context, Icons.trending_up, 'Incomes', AppRoutes.income),
-              _buildFeatureTile(context, Icons.trending_down, 'Expenses', AppRoutes.allExpenses),
-              _buildFeatureTile(context, Icons.analytics, 'Analytics', AppRoutes.analytics),
-              _buildFeatureTile(context, Icons.pie_chart, 'Budgets', AppRoutes.budget),
-              _buildFeatureTile(context, Icons.savings, 'Savings', AppRoutes.savings),
-              _buildFeatureTile(context, Icons.alarm, 'EMI Tracker', AppRoutes.emiCalculator),
-              _buildFeatureTile(context, Icons.handshake, 'Debt Logs', AppRoutes.borrowLend),
+              _buildFeatureTile(context, Icons.account_balance_wallet_outlined, 'Accounts', AppRoutes.accounts, Colors.blue),
+              _buildFeatureTile(context, Icons.arrow_circle_down_rounded, 'Incomes', AppRoutes.income, Colors.green),
+              _buildFeatureTile(context, Icons.arrow_circle_up_rounded, 'Expenses', AppRoutes.allExpenses, Colors.redAccent),
+              _buildFeatureTile(context, Icons.insights_rounded, 'Analytics', AppRoutes.analytics, Colors.purple),
+              _buildFeatureTile(context, Icons.pie_chart_outline_rounded, 'Budgets', AppRoutes.budget, Colors.amber),
+              _buildFeatureTile(context, Icons.savings_outlined, 'Savings', AppRoutes.savings, Colors.teal),
+              _buildFeatureTile(context, Icons.punch_clock_rounded, 'EMI Tracker', AppRoutes.emiCalculator, Colors.indigo),
+              _buildFeatureTile(context, Icons.handshake_outlined, 'Debt Logs', AppRoutes.borrowLend, Colors.deepOrange),
             ],
           ),
         ],
@@ -434,20 +705,20 @@ class DashboardScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildFeatureTile(BuildContext context, IconData icon, String label, String route) {
+  Widget _buildFeatureTile(BuildContext context, IconData icon, String label, String route, Color accentColor) {
     return InkWell(
       onTap: () => Navigator.pushNamed(context, route),
-      borderRadius: BorderRadius.circular(16),
+      borderRadius: BorderRadius.circular(18),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Container(
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.all(13),
             decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.primary.withOpacity(0.08),
+              color: accentColor.withValues(alpha: 0.1),
               shape: BoxShape.circle,
             ),
-            child: Icon(icon, color: Theme.of(context).colorScheme.primary, size: 22),
+            child: Icon(icon, color: accentColor, size: 22),
           ),
           const SizedBox(height: 6),
           Text(
@@ -502,8 +773,8 @@ class DashboardScreen extends StatelessWidget {
             Container(
               padding: const EdgeInsets.all(24),
               decoration: BoxDecoration(
-                color: Theme.of(context).dividerColor.withOpacity(0.03),
-                borderRadius: BorderRadius.circular(16),
+                color: Theme.of(context).dividerColor.withValues(alpha: 0.03),
+                borderRadius: BorderRadius.circular(18),
               ),
               child: const Text('No transactions recorded yet.', textAlign: TextAlign.center, style: TextStyle(color: Colors.grey)),
             )
@@ -517,23 +788,23 @@ class DashboardScreen extends StatelessWidget {
                 final item = feedItems[idx];
                 final isCredit = item['isCredit'] as bool;
                 return Container(
-                  padding: const EdgeInsets.all(16),
+                  padding: const EdgeInsets.all(14),
                   decoration: BoxDecoration(
                     color: Theme.of(context).cardColor,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: Theme.of(context).dividerColor.withOpacity(0.05)),
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(color: Theme.of(context).dividerColor.withValues(alpha: 0.06)),
                   ),
                   child: Row(
                     children: [
                       Container(
                         padding: const EdgeInsets.all(10),
                         decoration: BoxDecoration(
-                          color: (isCredit ? Colors.green : Colors.red).withOpacity(0.08),
+                          color: (isCredit ? Colors.green : Colors.redAccent).withValues(alpha: 0.1),
                           shape: BoxShape.circle,
                         ),
                         child: Icon(
-                          isCredit ? Icons.arrow_downward : Icons.arrow_upward,
-                          color: isCredit ? Colors.green : Colors.red,
+                          isCredit ? Icons.south_west_rounded : Icons.north_east_rounded,
+                          color: isCredit ? Colors.green : Colors.redAccent,
                           size: 16,
                         ),
                       ),
@@ -543,7 +814,7 @@ class DashboardScreen extends StatelessWidget {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(item['title'] as String, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                            const SizedBox(height: 4),
+                            const SizedBox(height: 2),
                             Text(
                               DateFormat('MMM dd, yyyy').format(item['date'] as DateTime),
                               style: const TextStyle(fontSize: 11, color: Colors.grey),
@@ -555,7 +826,8 @@ class DashboardScreen extends StatelessWidget {
                         '${isCredit ? '+' : '-'}$currencySymbol${(item['amount'] as double).toStringAsFixed(0)}',
                         style: TextStyle(
                           fontWeight: FontWeight.bold,
-                          color: isCredit ? Colors.green : Colors.red,
+                          fontSize: 14,
+                          color: isCredit ? Colors.green : Colors.redAccent,
                         ),
                       ),
                     ],
