@@ -5,6 +5,7 @@ import '../../domain/entities/transaction_entity.dart';
 import '../../domain/repositories/transaction_repository.dart';
 import '../viewmodels/accounts_view_model.dart';
 import '../viewmodels/savings_view_model.dart';
+import 'custom_snackbar.dart';
 
 class DeveloperDiagnosticsSheet extends StatefulWidget {
   const DeveloperDiagnosticsSheet({super.key});
@@ -35,7 +36,9 @@ class _DeveloperDiagnosticsSheetState extends State<DeveloperDiagnosticsSheet> {
   @override
   void initState() {
     super.initState();
-    _runDiagnostics();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _runDiagnostics();
+    });
   }
 
   Future<void> _runDiagnostics() async {
@@ -111,11 +114,10 @@ class _DeveloperDiagnosticsSheetState extends State<DeveloperDiagnosticsSheet> {
     await _runDiagnostics();
 
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("Ledger repaired successfully. Stored balances resynced."),
-          backgroundColor: Colors.green,
-        ),
+      AppSnackBar.show(
+        context,
+        message: "Ledger repaired successfully. Stored balances resynced.",
+        isError: false,
       );
     }
   }

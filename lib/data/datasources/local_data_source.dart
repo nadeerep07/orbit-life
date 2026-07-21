@@ -14,6 +14,7 @@ import '../models/borrow_lend_model.dart';
 import '../models/investment_model.dart';
 import '../models/transaction_model.dart';
 import '../models/settings_model.dart';
+import '../../core/services/cloud_sync_service.dart';
 
 
 abstract class LocalDataSource {
@@ -147,6 +148,29 @@ class HiveDataSourceImpl implements LocalDataSource {
     // Initialize default categories if box is empty
     await _migrateLegacyCategories();
     await _migrateAccountsAndIncomes();
+
+    // 🔄 Auto-Sync to Cloud Firestore whenever local data changes
+    final boxesToWatch = [
+      _categoryBox,
+      _expenseBox,
+      _accountBox,
+      _savingsBox,
+      _incomeBox,
+      _mileageBox,
+      _transferBox,
+      _goalBox,
+      _serviceBox,
+      _dietProfileBox,
+      _mealEntryBox,
+      _emiTrackerBox,
+      _borrowLendBox,
+      _investmentBox,
+      _transactionBox,
+    ];
+
+    for (var box in boxesToWatch) {
+      box.watch().listen((_) => CloudSyncService.triggerSync());
+    }
   }
 
   Future<void> _migrateAccountsAndIncomes() async {
@@ -170,7 +194,7 @@ class HiveDataSourceImpl implements LocalDataSource {
         ),
         AccountModel(
           id: 'supermoney',
-          name: 'Super Money Credit Card',
+          name: 'Credit Card',
           openingBalance: 0,
         ),
         AccountModel(id: 'cash', name: 'Cash', openingBalance: 0),

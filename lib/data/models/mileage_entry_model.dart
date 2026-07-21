@@ -99,4 +99,20 @@ class MileageEntryModel extends HiveObject {
       'linkedExpenseId': linkedExpenseId,
     };
   }
+
+  factory MileageEntryModel.fromJson(Map<String, dynamic> json) {
+    return MileageEntryModel(
+      id: json['id'] as String,
+      date: DateTime.parse(json['date'] as String),
+      odometerReading: (json['odometerReading'] as num).toDouble(),
+      petrolLitres: (json['petrolLitres'] as num).toDouble(),
+      pricePerLitre: (json['pricePerLitre'] as num).toDouble(),
+      totalCost: (json['totalCost'] as num).toDouble(),
+      distanceTravelled: (json['distanceTravelled'] as num?)?.toDouble(),
+      mileage: (json['mileage'] as num?)?.toDouble(),
+      paymentMethodId: json['paymentMethodId'] as String,
+      notes: json['notes'] as String? ?? '',
+      linkedExpenseId: json['linkedExpenseId'] as String?,
+    );
+  }
 }

@@ -5,6 +5,7 @@ import '../../domain/entities/emi_tracker_entity.dart';
 import '../../core/services/notification_service.dart';
 import '../viewmodels/emi_tracker_view_model.dart';
 import '../viewmodels/accounts_view_model.dart';
+import '../widgets/custom_snackbar.dart';
 
 class AddEmiScreen extends StatefulWidget {
   final EmiTrackerEntity? existingEmi;
@@ -335,11 +336,10 @@ class _AddEmiScreenState extends State<AddEmiScreen> {
     final notes = _notesController.text.trim();
 
     if (title.isEmpty || totalAmount <= 0 || _selectedAccountId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text("Please fill all required fields."),
-          backgroundColor: Theme.of(context).colorScheme.error,
-        ),
+      AppSnackBar.show(
+        context,
+        message: "Please fill all required fields.",
+        isError: true,
       );
       return;
     }
@@ -349,11 +349,10 @@ class _AddEmiScreenState extends State<AddEmiScreen> {
       final totalMonths = int.tryParse(_totalMonthsController.text) ?? 0;
 
       if (monthlyEmi <= 0 || totalMonths <= 0) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text("Please fill EMI amount and months."),
-            backgroundColor: Theme.of(context).colorScheme.error,
-          ),
+        AppSnackBar.show(
+          context,
+          message: "Please fill EMI amount and months.",
+          isError: true,
         );
         return;
       }

@@ -4,7 +4,10 @@ import '../../data/datasources/local_data_source.dart';
 import '../../domain/repositories/transaction_repository.dart';
 import '../../data/models/borrow_lend_model.dart';
 import '../../data/models/borrow_lend_transaction_model.dart';
+import '../../data/models/account_model.dart';
 import '../../data/models/transaction_model.dart';
+import '../../features/credit_card/data/models/credit_card_account_model.dart';
+import '../../features/credit_card/data/models/fd_lot_model.dart';
 
 class DataFixer {
   static Future<void> runFixes(
@@ -233,6 +236,101 @@ class DataFixer {
       } catch (e) {
         debugPrint('Error running V3 migration: $e');
       }
+    }
+
+    // 4. Run Credit Card & FD Lot Migration: Seed initial SuperMoney credit card & FD lot non-destructively
+    final bool isCreditCardMigrated = settingsBox.get(
+      'migration_credit_card_v1',
+      defaultValue: false,
+    );
+
+    if (!isCreditCardMigrated) {
+      try {
+        final ccBox = await Hive.openBox<CreditCardAccountModel>('credit_card_account_box');
+        final fdBox = await Hive.openBox<FdLotModel>('fd_lots_box');
+
+        final initialCc = CreditCardAccountModel(
+          id: 'supermoney',
+          name: 'Credit Card',
+          creditLimit: 21204.0,
+          availableCredit: 6790.0,
+          usedCredit: 14414.0,
+          cashbackPending: 371.38,
+          cashbackAvailable: 166.08,
+          cashbackRedeemed: 741.92,
+          lifetimeCashback: 1279.38,
+          statementDateDay: 1,
+          dueDateDay: 15,
+          initialCreditMigrated: true,
+          lastUpdated: DateTime.now(),
+        );
+        await ccBox.put('supermoney_account', initialCc);
+
+        if (fdBox.isEmpty) {
+          final now = DateTime.now();
+          final initialFd = FdLotModel(
+            id: 'fd_initial_seeded',
+            principal: 23560.0,
+            currentValue: 24016.39,
+            depositDate: now.subtract(const Duration(days: 120)),
+            maturityDate: now.add(const Duration(days: 245)),
+            lockUntil: now.subtract(const Duration(days: 113)),
+            interestRate: 6.0,
+            status: 'active',
+            autoRenew: true,
+            remarks: 'Initial FD Seed',
+          );
+          await fdBox.put('fd_initial_seeded', initialFd);
+        }
+
+        await settingsBox.put('migration_credit_card_v1', true);
+      } catch (e) {
+        debugPrint('Error running Credit Card migration: $e');
+      }
+    }
+
+    // 5. Ensure existing stored credit card accounts are named 'Credit Card'
+    try {
+      if (await Hive.boxExists('credit_card_account_box')) {
+        final ccBox = await Hive.openBox<CreditCardAccountModel>('credit_card_account_box');
+        final ccAcc = ccBox.get('supermoney_account');
+        if (ccAcc != null && ccAcc.name != 'Credit Card') {
+          await ccBox.put(
+            'supermoney_account',
+            CreditCardAccountModel(
+              id: ccAcc.id,
+              name: 'Credit Card',
+              creditLimit: ccAcc.creditLimit,
+              availableCredit: ccAcc.availableCredit,
+              usedCredit: ccAcc.usedCredit,
+              cashbackPending: ccAcc.cashbackPending,
+              cashbackAvailable: ccAcc.cashbackAvailable,
+              cashbackRedeemed: ccAcc.cashbackRedeemed,
+              lifetimeCashback: ccAcc.lifetimeCashback,
+              statementDateDay: ccAcc.statementDateDay,
+              dueDateDay: ccAcc.dueDateDay,
+              initialCreditMigrated: ccAcc.initialCreditMigrated,
+              lastUpdated: ccAcc.lastUpdated,
+            ),
+          );
+        }
+      }
+      if (await Hive.boxExists('accounts_box')) {
+        final accBox = await Hive.openBox<AccountModel>('accounts_box');
+        final acc = accBox.get('supermoney');
+        if (acc != null && acc.name != 'Credit Card') {
+          await accBox.put(
+            'supermoney',
+            AccountModel(
+              id: acc.id,
+              name: 'Credit Card',
+              openingBalance: acc.openingBalance,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      debugPrint('Error renaming credit card account in data fixer: $e');
     }
   }
 }

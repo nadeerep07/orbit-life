@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/utils/app_routes.dart';
+import '../../core/utils/responsive.dart';
 import '../viewmodels/accounts_view_model.dart';
 import '../viewmodels/expense_view_model.dart';
 import '../viewmodels/income_view_model.dart';
@@ -18,6 +19,8 @@ import '../../core/services/debt_optimization_engine.dart';
 import '../../core/services/spendable_wallet_engine.dart';
 import '../../core/services/daily_spending_engine.dart';
 import '../../core/services/financial_health_engine.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import '../../features/credit_card/presentation/blocs/credit_card_bloc.dart';
 
 class DashboardScreen extends StatelessWidget {
   const DashboardScreen({super.key});
@@ -129,25 +132,27 @@ class DashboardScreen extends StatelessWidget {
       categorySpent: categorySpent,
     );
 
+    final r = Responsive(context);
+
     return Scaffold(
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => _showQuickAddSheet(context),
-        backgroundColor: Theme.of(context).colorScheme.primary,
-        foregroundColor: Colors.white,
-        elevation: 4,
-        shape: const CircleBorder(),
-        child: const Icon(Icons.add, size: 28),
-      ),
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(vertical: 8),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
+        child: Stack(
+          children: [
+            Center(
+              child: ConstrainedBox(
+                constraints: BoxConstraints(maxWidth: r.contentMaxWidth),
+                child: SingleChildScrollView(
+                  padding: EdgeInsets.only(
+                    top: r.isTabletOrDesktop ? 16 : 8,
+                    bottom: 96,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               // ── Header Greeting & Profile ──────────────────────────────
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                padding: EdgeInsets.symmetric(horizontal: r.horizontalPadding, vertical: 12),
                 child: Row(
                   children: [
                     Container(
@@ -162,7 +167,7 @@ class DashboardScreen extends StatelessWidget {
                         ),
                       ),
                       child: CircleAvatar(
-                        radius: 20,
+                        radius: r.isTabletOrDesktop ? 26 : 20,
                         backgroundImage: user != null && user.photoUrl != null
                             ? NetworkImage(user.photoUrl!)
                             : null,
@@ -193,7 +198,7 @@ class DashboardScreen extends StatelessWidget {
                           ),
                           Text(
                             userName,
-                            style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
+                            style: TextStyle(fontSize: r.isTabletOrDesktop ? 20 : 17, fontWeight: FontWeight.bold),
                             overflow: TextOverflow.ellipsis,
                           ),
                         ],
@@ -241,169 +246,95 @@ class DashboardScreen extends StatelessWidget {
                         ),
                       ),
                     ),
-                    const SizedBox(width: 8),
-                    Container(
-                      decoration: BoxDecoration(
-                        color: Theme.of(context).dividerColor.withValues(alpha: 0.06),
-                        shape: BoxShape.circle,
-                      ),
-                      child: IconButton(
-                        icon: const Icon(Icons.settings_outlined, size: 20),
-                        onPressed: () => Navigator.pushNamed(context, AppRoutes.setting),
-                      ),
-                    ),
+                    // const SizedBox(width: 8),
+                    // Container(
+                    //   decoration: BoxDecoration(
+                    //     color: Theme.of(context).dividerColor.withValues(alpha: 0.06),
+                    //     shape: BoxShape.circle,
+                    //   ),
+                    //   child: IconButton(
+                    //     icon: const Icon(Icons.settings_outlined, size: 20),
+                    //     onPressed: () => Navigator.pushNamed(context, AppRoutes.setting),
+                    //   ),
+                    // ),
                   ],
                 ),
               ),
 
-              // ── Dynamic Daily Limit & Wallet Card (Hero Card) ────────────────────────
-              Container(
-                margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                padding: const EdgeInsets.all(22),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [
-                      Theme.of(context).colorScheme.primary,
-                      Theme.of(context).colorScheme.primary.withValues(alpha: 0.82),
-                      Theme.of(context).colorScheme.secondary.withValues(alpha: 0.9),
-                    ],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
+              // ── Compact Safe Daily Spending Limit Micro Bar ─────────────────────
+              Padding(
+                padding: EdgeInsets.symmetric(horizontal: r.horizontalPadding, vertical: 4),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: Theme.of(context).dividerColor.withValues(alpha: 0.08)),
                   ),
-                  borderRadius: BorderRadius.circular(26),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.3),
-                      blurRadius: 18,
-                      offset: const Offset(0, 8),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.all(6),
-                              decoration: BoxDecoration(
-                                color: Colors.white24,
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: const Icon(Icons.account_balance_wallet_rounded, color: Colors.white, size: 14),
-                            ),
-                            const SizedBox(width: 8),
-                            const Text(
-                              "SAFE DAILY SPENDING LIMIT",
-                              style: TextStyle(
-                                color: Colors.white70,
-                                fontSize: 11,
-                                fontWeight: FontWeight.bold,
-                                letterSpacing: 1.1,
-                              ),
-                            ),
-                          ],
+                  child: Row(
+                    children: [
+                      Icon(Icons.auto_awesome_rounded, size: 16, color: Theme.of(context).colorScheme.primary),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Safe Daily Limit: ',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Theme.of(context).textTheme.bodyMedium?.color?.withValues(alpha: 0.7),
                         ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.22),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Text(
-                            settings.financialMode.toUpperCase(),
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 10,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
+                      ),
+                      Text(
+                        '$currencySymbol${dailySpendingReport.dailyLimit.toStringAsFixed(0)}/day',
+                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                      ),
+                      const Spacer(),
+                      Text(
+                        'Spent: $currencySymbol${totalSpent.toStringAsFixed(0)}',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          color: Theme.of(context).colorScheme.primary,
                         ),
-                      ],
-                    ),
-                    const SizedBox(height: 14),
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.baseline,
-                      textBaseline: TextBaseline.alphabetic,
-                      children: [
-                        Text(
-                          '$currencySymbol${dailySpendingReport.dailyLimit.toStringAsFixed(0)}',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 38,
-                            fontWeight: FontWeight.bold,
-                            letterSpacing: -0.5,
-                          ),
-                        ),
-                        const SizedBox(width: 6),
-                        const Text(
-                          '/ day',
-                          style: TextStyle(color: Colors.white70, fontSize: 15, fontWeight: FontWeight.w500),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    // Spending progress bar
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(6),
-                          child: LinearProgressIndicator(
-                            value: (spendableWallet.totalSpendableAmount > 0
-                                    ? (totalSpent / spendableWallet.totalSpendableAmount)
-                                    : 0.0)
-                                .clamp(0.0, 1.0),
-                            minHeight: 6,
-                            backgroundColor: Colors.white24,
-                            valueColor: const AlwaysStoppedAnimation<Color>(Colors.white),
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(
-                              'Spent: $currencySymbol${totalSpent.toStringAsFixed(0)}',
-                              style: const TextStyle(color: Colors.white70, fontSize: 11),
-                            ),
-                            Text(
-                              'Wallet: $currencySymbol${totalBalance.toStringAsFixed(0)}',
-                              style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ],
+                      ),
+                    ],
+                  ),
                 ),
               ),
+
+              // ── SuperMoney FD-Backed Secured Credit Card Banner ────────────────────
+              _buildSuperMoneyCard(context),
 
               // ── Quick Financial Metrics Row ────────────────────────────
               _buildFinancialMetricsRow(
                 context,
+                balance: totalBalance,
                 income: totalIncome,
                 expenses: totalSpent,
                 savings: actualSavings,
-                obligations: obligationsAnalysis.totalObligations,
               ),
 
               // ── Smart Dynamic Insights Carousel ────────────────────────────
-              _buildSmartInsightsCarousel(context, healthReport),
-
-              // ── Financial Health Gauge ────────────────────────────────────
-              _buildHealthGaugeCard(context, healthReport),
+          //    _buildSmartInsightsCarousel(context, healthReport),
 
               // ── Quick Navigation Services ─────────────────────────────────
-              _buildGroupedModules(context),
+              const FinancialUtilitiesSection(),
 
               // ── Recent Transaction Logs ──────────────────────────────────
               _buildRecentFeed(context, expenseVM, incomeVM),
             ],
           ),
+        ),
+        ),
+        ),
+            
+            // ── Premium Floating Glassmorphic Dock ──────────────────────────
+            Align(
+              alignment: Alignment.bottomCenter,
+              child: Padding(
+                padding: const EdgeInsets.only(bottom: 20),
+                child: _buildFloatingGlassmorphicDock(context),
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -411,11 +342,29 @@ class DashboardScreen extends StatelessWidget {
 
   Widget _buildFinancialMetricsRow(
     BuildContext context, {
+    required double balance,
     required double income,
     required double expenses,
     required double savings,
-    required double obligations,
   }) {
+    final r = Responsive(context);
+    // On tablet show a grid row instead of horizontal scroll
+    if (r.isTabletOrDesktop) {
+      return Padding(
+        padding: EdgeInsets.symmetric(horizontal: r.horizontalPadding, vertical: 8),
+        child: Row(
+          children: [
+            _buildMetricCard(context, title: 'Net Balance', amount: balance, icon: Icons.account_balance_wallet_rounded, iconColor: Colors.blueAccent, bgColor: Colors.blueAccent.withValues(alpha: 0.08), onTap: () => Navigator.pushNamed(context, AppRoutes.accounts), flex: 1),
+            const SizedBox(width: 12),
+            _buildMetricCard(context, title: 'Income', amount: income, icon: Icons.south_west_rounded, iconColor: Colors.green, bgColor: Colors.green.withValues(alpha: 0.08), onTap: () => Navigator.pushNamed(context, AppRoutes.income), flex: 1),
+            const SizedBox(width: 12),
+            _buildMetricCard(context, title: 'Expenses', amount: expenses, icon: Icons.north_east_rounded, iconColor: Colors.redAccent, bgColor: Colors.redAccent.withValues(alpha: 0.08), onTap: () => Navigator.pushNamed(context, AppRoutes.allExpenses), flex: 1),
+            const SizedBox(width: 12),
+            _buildMetricCard(context, title: 'Savings', amount: savings, icon: Icons.savings_rounded, iconColor: Colors.teal, bgColor: Colors.teal.withValues(alpha: 0.08), onTap: () => Navigator.pushNamed(context, AppRoutes.savings), flex: 1),
+          ],
+        ),
+      );
+    }
     return Container(
       height: 95,
       margin: const EdgeInsets.symmetric(vertical: 4),
@@ -423,6 +372,15 @@ class DashboardScreen extends StatelessWidget {
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 16),
         children: [
+          _buildMetricCard(
+            context,
+            title: 'Net Balance',
+            amount: balance,
+            icon: Icons.account_balance_wallet_rounded,
+            iconColor: Colors.blueAccent,
+            bgColor: Colors.blueAccent.withValues(alpha: 0.08),
+            onTap: () => Navigator.pushNamed(context, AppRoutes.accounts),
+          ),
           _buildMetricCard(
             context,
             title: 'Income',
@@ -450,15 +408,6 @@ class DashboardScreen extends StatelessWidget {
             bgColor: Colors.teal.withValues(alpha: 0.08),
             onTap: () => Navigator.pushNamed(context, AppRoutes.savings),
           ),
-          _buildMetricCard(
-            context,
-            title: 'Obligations',
-            amount: obligations,
-            icon: Icons.receipt_long_rounded,
-            iconColor: Colors.orange,
-            bgColor: Colors.orange.withValues(alpha: 0.08),
-            onTap: () => Navigator.pushNamed(context, AppRoutes.emiCalculator),
-          ),
         ],
       ),
     );
@@ -472,66 +421,72 @@ class DashboardScreen extends StatelessWidget {
     required Color iconColor,
     required Color bgColor,
     required VoidCallback onTap,
+    int flex = 0,
   }) {
-    return Container(
-      width: 145,
-      margin: const EdgeInsets.only(right: 10),
-      child: Card(
-        elevation: 0,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(18),
-          side: BorderSide(color: Theme.of(context).dividerColor.withValues(alpha: 0.06)),
-        ),
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(18),
-          child: Padding(
-            padding: const EdgeInsets.all(10),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Expanded(
-                      child: Text(
-                        title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                          color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
-                        ),
+    final card = Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(18),
+        side: BorderSide(color: Theme.of(context).dividerColor.withValues(alpha: 0.06)),
+      ),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(18),
+        child: Padding(
+          padding: const EdgeInsets.all(10),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(
+                    child: Text(
+                      title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
                       ),
                     ),
-                    const SizedBox(width: 4),
-                    Container(
-                      padding: const EdgeInsets.all(4),
-                      decoration: BoxDecoration(
-                        color: bgColor,
-                        shape: BoxShape.circle,
-                      ),
-                      child: Icon(icon, color: iconColor, size: 14),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  '$currencySymbol${amount.toStringAsFixed(0)}',
-                  style: const TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.bold,
                   ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+                  const SizedBox(width: 4),
+                  Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: BoxDecoration(
+                      color: bgColor,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(icon, color: iconColor, size: 14),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              Text(
+                '$currencySymbol${amount.toStringAsFixed(0)}',
+                style: const TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.bold,
                 ),
-              ],
-            ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
           ),
         ),
       ),
+    );
+    // Tablet row: use Expanded; mobile scroll: fixed width container
+    if (flex > 0) {
+      return Expanded(child: SizedBox(height: 85, child: card));
+    }
+    return Container(
+      width: 145,
+      margin: const EdgeInsets.only(right: 10),
+      child: card,
     );
   }
 
@@ -667,69 +622,8 @@ class DashboardScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildGroupedModules(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'FINANCIAL UTILITIES',
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.bold,
-              letterSpacing: 1.2,
-              color: Colors.grey,
-            ),
-          ),
-          const SizedBox(height: 12),
-          GridView.count(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            crossAxisCount: 4,
-            mainAxisSpacing: 16,
-            crossAxisSpacing: 16,
-            children: [
-              _buildFeatureTile(context, Icons.account_balance_wallet_outlined, 'Accounts', AppRoutes.accounts, Colors.blue),
-              _buildFeatureTile(context, Icons.arrow_circle_down_rounded, 'Incomes', AppRoutes.income, Colors.green),
-              _buildFeatureTile(context, Icons.arrow_circle_up_rounded, 'Expenses', AppRoutes.allExpenses, Colors.redAccent),
-              _buildFeatureTile(context, Icons.insights_rounded, 'Analytics', AppRoutes.analytics, Colors.purple),
-              _buildFeatureTile(context, Icons.pie_chart_outline_rounded, 'Budgets', AppRoutes.budget, Colors.amber),
-              _buildFeatureTile(context, Icons.savings_outlined, 'Savings', AppRoutes.savings, Colors.teal),
-              _buildFeatureTile(context, Icons.punch_clock_rounded, 'EMI Tracker', AppRoutes.emiCalculator, Colors.indigo),
-              _buildFeatureTile(context, Icons.handshake_outlined, 'Debt Logs', AppRoutes.borrowLend, Colors.deepOrange),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildFeatureTile(BuildContext context, IconData icon, String label, String route, Color accentColor) {
-    return InkWell(
-      onTap: () => Navigator.pushNamed(context, route),
-      borderRadius: BorderRadius.circular(18),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(13),
-            decoration: BoxDecoration(
-              color: accentColor.withValues(alpha: 0.1),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(icon, color: accentColor, size: 22),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            label,
-            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
-            textAlign: TextAlign.center,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ],
-      ),
-    );
+  Widget _buildSuperMoneyCard(BuildContext context) {
+    return const SecuredCreditCardBanner();
   }
 
   Widget _buildRecentFeed(BuildContext context, ExpenseViewModel expenseVM, IncomeViewModel incomeVM) {
@@ -747,8 +641,9 @@ class DashboardScreen extends StatelessWidget {
 
     feedItems.sort((a, b) => (b['date'] as DateTime).compareTo(a['date'] as DateTime));
 
+    final r = Responsive(context);
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      padding: EdgeInsets.symmetric(horizontal: r.horizontalPadding, vertical: 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -927,6 +822,121 @@ class DashboardScreen extends StatelessWidget {
       },
     );
   }
+
+  Widget _buildFloatingGlassmorphicDock(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDarkMode = theme.brightness == Brightness.dark;
+    
+    final dockBgColor = isDarkMode 
+        ? const Color(0xFF1E293B).withValues(alpha: 0.85) 
+        : Colors.white.withValues(alpha: 0.85);
+    final dockBorderColor = isDarkMode 
+        ? const Color(0xFF334155).withValues(alpha: 0.5) 
+        : const Color(0xFFE2E8F0).withValues(alpha: 0.5);
+    final iconColor = isDarkMode ? Colors.white70 : const Color(0xFF475569);
+
+    return Container(
+      width: 320,
+      height: 64,
+      decoration: BoxDecoration(
+        color: dockBgColor,
+        borderRadius: BorderRadius.circular(32),
+        border: Border.all(color: dockBorderColor, width: 1.5),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: isDarkMode ? 0.4 : 0.08),
+            blurRadius: 24,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+        children: [
+          // Button 1: Analytics
+          _buildDockButton(
+            context,
+            icon: Icons.insights_rounded,
+            label: 'Analytics',
+            color: iconColor,
+            onTap: () => Navigator.pushNamed(context, AppRoutes.analytics),
+          ),
+          
+          // Center Button: Quick Add (Trigger sheet)
+          GestureDetector(
+            onTap: () => _showQuickAddSheet(context),
+            child: Container(
+              width: 50,
+              height: 50,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    theme.colorScheme.primary,
+                    theme.colorScheme.secondary,
+                  ],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: theme.colorScheme.primary.withValues(alpha: 0.4),
+                    blurRadius: 12,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: const Icon(
+                Icons.add_rounded,
+                color: Colors.white,
+                size: 28,
+              ),
+            ),
+          ),
+
+          // Button 3: Settings
+          _buildDockButton(
+            context,
+            icon: Icons.settings_rounded,
+            label: 'Settings',
+            color: iconColor,
+            onTap: () => Navigator.pushNamed(context, AppRoutes.setting),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDockButton(
+    BuildContext context, {
+    required IconData icon,
+    required String label,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, color: color, size: 22),
+            const SizedBox(height: 2),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 9,
+                fontWeight: FontWeight.bold,
+                color: color,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 class _QuickAddButton extends StatelessWidget {
@@ -1001,4 +1011,395 @@ Future<DateTime?> showMonthPicker(BuildContext context, DateTime initialDate) as
     lastDate: DateTime(now.year + 5),
     initialDatePickerMode: DatePickerMode.year,
   );
+}
+
+class SecuredCreditCardBanner extends StatefulWidget {
+  const SecuredCreditCardBanner({super.key});
+
+  @override
+  State<SecuredCreditCardBanner> createState() => _SecuredCreditCardBannerState();
+}
+
+class _SecuredCreditCardBannerState extends State<SecuredCreditCardBanner> {
+  bool _isExpanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+
+    final cardGradient = isDarkMode
+        ? const LinearGradient(
+            colors: [Color(0xFF0F172A), Color(0xFF1E293B), Color(0xFF020617)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          )
+        : const LinearGradient(
+            colors: [Color(0xFFFFFFFF), Color(0xFFF8FAFC), Color(0xFFE2E8F0)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          );
+
+    final titleColor = isDarkMode ? Colors.white : const Color(0xFF0F172A);
+    final subTextColor = isDarkMode ? Colors.white60 : const Color(0xFF475569);
+    final shadowColor = isDarkMode ? Colors.black.withValues(alpha: 0.45) : Colors.black.withValues(alpha: 0.08);
+    final borderColor = isDarkMode
+        ? Colors.amberAccent.withValues(alpha: 0.25)
+        : const Color(0xFFD97706).withValues(alpha: 0.35);
+
+    return BlocBuilder<CreditCardBloc, CreditCardState>(
+      builder: (context, state) {
+        if (state is CreditCardLoadedState) {
+          final account = state.account;
+          final utilization = account.creditLimit > 0
+              ? (account.usedCredit / account.creditLimit).clamp(0.0, 1.0)
+              : 0.0;
+
+          return Container(
+            margin: EdgeInsets.symmetric(horizontal: Responsive(context).horizontalPadding, vertical: 8),
+            decoration: BoxDecoration(
+              gradient: cardGradient,
+              borderRadius: BorderRadius.circular(28),
+              boxShadow: [
+                BoxShadow(
+                  color: shadowColor,
+                  blurRadius: 20,
+                  offset: const Offset(0, 10),
+                ),
+              ],
+              border: Border.all(
+                color: borderColor,
+                width: 1.2,
+              ),
+            ),
+            child: InkWell(
+              onTap: () {
+                setState(() {
+                  _isExpanded = !_isExpanded;
+                });
+              },
+              borderRadius: BorderRadius.circular(28),
+              child: Padding(
+                padding: const EdgeInsets.all(22),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(6),
+                              decoration: BoxDecoration(
+                                gradient: const LinearGradient(
+                                  colors: [Color(0xFFF59E0B), Color(0xFFD97706)],
+                                ),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: const Icon(Icons.credit_card_rounded, color: Colors.white, size: 16),
+                            ),
+                            const SizedBox(width: 10),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'CREDIT CARD SECURED',
+                                  style: TextStyle(
+                                    color: titleColor,
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w800,
+                                    letterSpacing: 0.8,
+                                  ),
+                                ),
+                                Text(
+                                  'FD BACKED • 6.0% DAILY INTEREST',
+                                  style: TextStyle(
+                                    color: const Color(0xFFD97706),
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.bold,
+                                    letterSpacing: 0.6,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                        Row(
+                          children: [
+                            Icon(Icons.contactless_rounded, color: subTextColor, size: 20),
+                            const SizedBox(width: 8),
+                            Icon(
+                              _isExpanded
+                                  ? Icons.keyboard_arrow_up_rounded
+                                  : Icons.keyboard_arrow_down_rounded,
+                              color: titleColor,
+                              size: 24,
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                    
+                    if (!_isExpanded) ...[
+                      const SizedBox(height: 12),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            'Used: $currencySymbol${account.usedCredit.toStringAsFixed(0)} / $currencySymbol${account.creditLimit.toStringAsFixed(0)}',
+                            style: TextStyle(color: subTextColor, fontSize: 11, fontWeight: FontWeight.bold),
+                          ),
+                          Text(
+                            'Available: $currencySymbol${account.availableCredit.toStringAsFixed(0)}',
+                            style: TextStyle(
+                              color: utilization > 0.8 ? Colors.redAccent : const Color(0xFFD97706),
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+
+                    if (_isExpanded) ...[
+                      const SizedBox(height: 20),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('Available Credit', style: TextStyle(color: subTextColor, fontSize: 11, fontWeight: FontWeight.w500)),
+                              const SizedBox(height: 4),
+                              Text(
+                                '$currencySymbol${account.availableCredit.toStringAsFixed(0)}',
+                                style: TextStyle(color: titleColor, fontSize: 28, fontWeight: FontWeight.w900),
+                              ),
+                            ],
+                          ),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              Text('Used Credit', style: TextStyle(color: subTextColor, fontSize: 11, fontWeight: FontWeight.w500)),
+                              const SizedBox(height: 4),
+                              Text(
+                                '$currencySymbol${account.usedCredit.toStringAsFixed(0)}',
+                                style: TextStyle(
+                                  color: utilization > 0.8 ? Colors.redAccent : (isDarkMode ? Colors.white70 : const Color(0xFF334155)),
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(6),
+                        child: LinearProgressIndicator(
+                          value: utilization,
+                          minHeight: 6,
+                          backgroundColor: isDarkMode ? Colors.white12 : Colors.black.withValues(alpha: 0.08),
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                            utilization > 0.8 ? Colors.redAccent : const Color(0xFFD97706),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 18),
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton(
+                          onPressed: () => Navigator.pushNamed(context, AppRoutes.creditCardDashboard),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: isDarkMode ? const Color(0xFFF59E0B) : const Color(0xFF0F172A),
+                            foregroundColor: isDarkMode ? Colors.black : Colors.white,
+                            elevation: 0,
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Text('Manage Credit Card & FDs', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 13, color: isDarkMode ? Colors.black : Colors.white)),
+                              const SizedBox(width: 8),
+                              Icon(Icons.arrow_forward_rounded, size: 16, color: isDarkMode ? Colors.black : Colors.white),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          );
+        }
+        return const SizedBox.shrink();
+      },
+    );
+  }
+}
+
+class FinancialUtilitiesSection extends StatefulWidget {
+  const FinancialUtilitiesSection({super.key});
+
+  @override
+  State<FinancialUtilitiesSection> createState() => _FinancialUtilitiesSectionState();
+}
+
+class _FinancialUtilitiesSectionState extends State<FinancialUtilitiesSection> {
+  bool _isExpanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final r = Responsive(context);
+    final columns = r.isTabletOrDesktop ? 6 : 4;
+
+    // Main features (always visible)
+    final mainTiles = [
+      _FeatureTileData(Icons.account_balance_wallet_outlined, 'Accounts', AppRoutes.accounts, Colors.blue),
+      _FeatureTileData(Icons.arrow_circle_down_rounded, 'Incomes', AppRoutes.income, Colors.green),
+      _FeatureTileData(Icons.arrow_circle_up_rounded, 'Expenses', AppRoutes.allExpenses, Colors.redAccent),
+      _FeatureTileData(Icons.punch_clock_rounded, 'EMI Tracker', AppRoutes.emiCalculator, Colors.indigo),
+      _FeatureTileData(Icons.pie_chart_outline_rounded, 'Budgets', AppRoutes.budget, Colors.amber),
+      _FeatureTileData(Icons.handshake_rounded, 'Debt Logs', AppRoutes.borrowLend, Colors.orange),
+      _FeatureTileData(Icons.flag_rounded, 'Goals', AppRoutes.goals, Colors.teal),
+    ];
+
+    // Extra features (visible when expanded)
+    final extraTiles = [
+      _FeatureTileData(Icons.credit_card_rounded, 'Credit Card', AppRoutes.creditCardDashboard, Colors.indigoAccent),
+      _FeatureTileData(Icons.savings_outlined, 'Savings', AppRoutes.savings, Colors.teal),
+      _FeatureTileData(Icons.insights_rounded, 'Analytics', AppRoutes.analytics, Colors.purple),
+      _FeatureTileData(Icons.directions_car_rounded, 'Mileage', AppRoutes.mileage, Colors.blueGrey),
+      _FeatureTileData(Icons.trending_up_rounded, 'Investments', AppRoutes.investments, Colors.cyan),
+      _FeatureTileData(Icons.restaurant_rounded, 'Diet', AppRoutes.dietDashboard, Colors.lightGreen),
+    ];
+
+    final visibleTiles = <Widget>[];
+
+    // Add main tiles
+    for (final tile in mainTiles) {
+      visibleTiles.add(_buildFeatureTile(context, tile.icon, tile.title, tile.route, tile.color));
+    }
+
+    if (_isExpanded) {
+      // Add extra tiles when expanded
+      for (final tile in extraTiles) {
+        visibleTiles.add(_buildFeatureTile(context, tile.icon, tile.title, tile.route, tile.color));
+      }
+      // Add "Less" tile
+      visibleTiles.add(
+        _buildActionTile(
+          context,
+          Icons.keyboard_arrow_up_rounded,
+          'Show Less',
+          Colors.grey,
+          () => setState(() => _isExpanded = false),
+        ),
+      );
+    } else {
+      // Add "More" tile
+      visibleTiles.add(
+        _buildActionTile(
+          context,
+          Icons.grid_view_rounded,
+          'View All',
+          Colors.grey,
+          () => setState(() => _isExpanded = true),
+        ),
+      );
+    }
+
+    return Padding(
+      padding: EdgeInsets.symmetric(horizontal: r.horizontalPadding, vertical: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'FINANCIAL UTILITIES',
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.bold,
+              letterSpacing: 1.2,
+              color: Colors.grey,
+            ),
+          ),
+          const SizedBox(height: 12),
+          GridView.count(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            crossAxisCount: columns,
+            mainAxisSpacing: 16,
+            crossAxisSpacing: 16,
+            children: visibleTiles,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFeatureTile(BuildContext context, IconData icon, String label, String route, Color accentColor) {
+    return InkWell(
+      onTap: () => Navigator.pushNamed(context, route),
+      borderRadius: BorderRadius.circular(18),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(13),
+            decoration: BoxDecoration(
+              color: accentColor.withValues(alpha: 0.1),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, color: accentColor, size: 22),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            label,
+            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+            textAlign: TextAlign.center,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildActionTile(BuildContext context, IconData icon, String label, Color accentColor, VoidCallback onTap) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(18),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(13),
+            decoration: BoxDecoration(
+              color: accentColor.withValues(alpha: 0.1),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, color: accentColor, size: 22),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            label,
+            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.blueAccent),
+            textAlign: TextAlign.center,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _FeatureTileData {
+  final IconData icon;
+  final String title;
+  final String route;
+  final Color color;
+
+  const _FeatureTileData(this.icon, this.title, this.route, this.color);
 }

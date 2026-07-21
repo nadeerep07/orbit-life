@@ -78,4 +78,17 @@ class ServiceModel extends HiveObject {
       'nextServiceMileage': nextServiceMileage,
     };
   }
+
+  factory ServiceModel.fromJson(Map<String, dynamic> json) {
+    return ServiceModel(
+      id: json['id'] as String,
+      title: json['title'] as String,
+      date: DateTime.parse(json['date'] as String),
+      mileageAtService: (json['mileageAtService'] as num).toInt(),
+      cost: (json['cost'] as num).toDouble(),
+      notes: json['notes'] as String? ?? '',
+      nextServiceDate: json['nextServiceDate'] != null ? DateTime.parse(json['nextServiceDate'] as String) : null,
+      nextServiceMileage: (json['nextServiceMileage'] as num?)?.toInt(),
+    );
+  }
 }

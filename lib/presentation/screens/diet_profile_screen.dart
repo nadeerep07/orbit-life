@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../theme/app_theme.dart';
 import '../viewmodels/diet_view_model.dart';
+import '../widgets/custom_snackbar.dart';
 
 class DietProfileScreen extends StatefulWidget {
   const DietProfileScreen({super.key});
@@ -183,11 +184,10 @@ class _DietProfileScreenState extends State<DietProfileScreen> {
     final age = int.tryParse(_ageController.text) ?? 0;
 
     if (weight <= 0 || height <= 0 || age <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('Please enter valid physical details'),
-          backgroundColor: Theme.of(context).colorScheme.error,
-        ),
+      AppSnackBar.show(
+        context,
+        message: 'Please enter valid physical details',
+        isError: true,
       );
       return;
     }

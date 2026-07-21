@@ -18,18 +18,34 @@ class AccountsViewModel extends ChangeNotifier {
   bool get isLoading => _isLoading;
 
   AccountsViewModel(this._accountRepository, this._transactionRepository) {
-    Hive.box<AccountModel>('accounts').watch().listen((event) {
-      loadAccounts(silent: true);
-    });
+    try {
+      Hive.box<AccountModel>('accounts').watch().listen((event) {
+        loadAccounts(silent: true);
+      });
+    } catch (_) {}
   }
 
   Future<void> loadAccounts({bool silent = false}) async {
     if (!silent) {
       _isLoading = true;
-      notifyListeners();
+      if (hasListeners) {
+        notifyListeners();
+      }
     }
 
     _accounts = await _accountRepository.getAccounts();
+
+    // Ensure supermoney account displays as 'Credit Card'
+    final superMoneyIdx = _accounts.indexWhere((acc) => acc.id == 'supermoney');
+    if (superMoneyIdx != -1 && _accounts[superMoneyIdx].name != 'Credit Card') {
+      final updated = AccountEntity(
+        id: _accounts[superMoneyIdx].id,
+        name: 'Credit Card',
+        openingBalance: _accounts[superMoneyIdx].openingBalance,
+      );
+      await _accountRepository.updateAccount(updated);
+      _accounts[superMoneyIdx] = updated;
+    }
 
     // Setup predefined accounts if none exist
     if (_accounts.isEmpty) {
@@ -43,7 +59,7 @@ class AccountsViewModel extends ChangeNotifier {
         ),
         const AccountEntity(
           id: 'supermoney',
-          name: 'Super Money Credit Card',
+          name: 'Credit Card',
           openingBalance: 0,
         ),
         const AccountEntity(id: 'cash', name: 'Cash', openingBalance: 0),

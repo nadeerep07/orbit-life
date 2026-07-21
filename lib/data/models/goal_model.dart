@@ -57,4 +57,14 @@ class GoalModel extends HiveObject {
       'targetDate': targetDate?.toIso8601String(),
     };
   }
+
+  factory GoalModel.fromJson(Map<String, dynamic> json) {
+    return GoalModel(
+      id: json['id'] as String,
+      name: json['name'] as String,
+      targetAmount: (json['targetAmount'] as num).toDouble(),
+      currentSavings: (json['currentSavings'] as num).toDouble(),
+      targetDate: json['targetDate'] != null ? DateTime.parse(json['targetDate'] as String) : null,
+    );
+  }
 }

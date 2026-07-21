@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../theme/app_theme.dart';
 import '../viewmodels/service_view_model.dart';
 import 'service_tracker_screen.dart';
+import '../widgets/custom_snackbar.dart';
 
 class ServicesHistoryScreen extends StatefulWidget {
   const ServicesHistoryScreen({super.key});
@@ -50,8 +51,10 @@ class _ServicesHistoryScreenState extends State<ServicesHistoryScreen> {
                   ),
                   onDismissed: (_) {
                     serviceVM.deleteService(svc.id);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Service record deleted')),
+                    AppSnackBar.show(
+                      context,
+                      message: 'Service record deleted',
+                      isError: false,
                     );
                   },
                   child: IOSCard(

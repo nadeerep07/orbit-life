@@ -37,27 +37,8 @@ class AccountDetailViewModel extends ChangeNotifier {
   TransactionSortOption get sortOption => _sortOption;
 
   double get accountCalculatedBalance {
-    return _allTransactions.fold(0.0, (sum, tx) {
-      if (tx.isCredit || (tx.type == TransactionType.transfer && tx.targetAccountId == _allTransactions.firstOrNull?.accountId)) {
-        // Simple heuristic: if the account is target of a transfer/savings, it is a credit.
-        // But since we already compute it in recalculateBalances, let's calculate based on credit mapping.
-        // Wait, for transfers: if tx.targetAccountId == accountId, it is credit.
-        // Let's write the exact credit evaluation:
-        final currentAccount = tx.accountId;
-        final targetAccount = tx.targetAccountId;
-        
-        bool evaluatedCredit = tx.isCredit;
-        if (tx.type == TransactionType.transfer || tx.type == TransactionType.savings) {
-          // If we are looking from the perspective of targetAccountId, it's credit.
-          // Otherwise if from accountId, it's debit.
-          evaluatedCredit = targetAccount == tx.accountId; // wait, this depends on which account we are viewing.
-          // Let's pass the accountId to make this calculation robust!
-        }
-      }
-      // Actually, since accounts_box already stores the calculated openingBalance correctly, we don't have to recompute this in the viewmodel dynamically. We can just load it or compute it using perspective.
-      // Let's make it robust by checking the active accountId:
-      return sum;
-    });
+    final firstAccId = _allTransactions.firstOrNull?.accountId ?? '';
+    return getAccountCalculatedBalance(firstAccId);
   }
 
   // A better, account-specific dynamic balance calculation

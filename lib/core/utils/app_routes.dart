@@ -18,6 +18,7 @@ import 'package:my_budget_pro/presentation/screens/service_tracker_screen.dart';
 import 'package:my_budget_pro/presentation/screens/services_history_screen.dart';
 import 'package:my_budget_pro/presentation/screens/diet_dashboard_screen.dart';
 import '../../presentation/screens/dashboard_screen.dart';
+import '../../features/credit_card/presentation/screens/fd_credit_card_dashboard_screen.dart';
 
 import '../../presentation/screens/borrow_lend_screen.dart';
 import '../../presentation/screens/add_borrow_lend_screen.dart';
@@ -49,6 +50,7 @@ class AppRoutes {
   static const String serviceTracker = '/serviceTracker';
   static const String serviceHistory = '/serviceHistory';
   static const String dietDashboard = '/dietDashboard';
+  static const String creditCardDashboard = '/creditCardDashboard';
 
   static const String borrowLend = '/borrowLend';
   static const String addBorrowLend = '/addBorrowLend';
@@ -109,6 +111,8 @@ class AppRoutes {
         return MaterialPageRoute(builder: (_) => const ServicesHistoryScreen());
       case dietDashboard:
         return MaterialPageRoute(builder: (_) => const DietDashboardScreen());
+      case creditCardDashboard:
+        return MaterialPageRoute(builder: (_) => const FdCreditCardDashboardScreen());
 
       // Borrow & Lend
       case borrowLend:

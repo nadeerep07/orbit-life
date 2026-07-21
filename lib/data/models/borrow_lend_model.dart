@@ -85,4 +85,40 @@ class BorrowLendModel extends HiveObject {
       transactions: transactions.map((t) => t.toEntity()).toList(),
     );
   }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'personName': personName,
+      'phoneNumber': phoneNumber,
+      'amount': amount,
+      'type': type,
+      'date': date.toIso8601String(),
+      'dueDate': dueDate?.toIso8601String(),
+      'note': note,
+      'status': status,
+      'accountId': accountId,
+      'transactions': transactions.map((t) => t.toJson()).toList(),
+    };
+  }
+
+  factory BorrowLendModel.fromJson(Map<String, dynamic> json) {
+    return BorrowLendModel(
+      id: json['id'] as String,
+      personName: json['personName'] as String,
+      phoneNumber: (json['phoneNumber'] as String?) ?? '',
+      amount: (json['amount'] as num).toDouble(),
+      type: json['type'] as String,
+      date: DateTime.parse(json['date'] as String),
+      dueDate: json['dueDate'] != null ? DateTime.parse(json['dueDate'] as String) : null,
+      note: (json['note'] as String?) ?? '',
+      status: json['status'] as String,
+      accountId: (json['accountId'] as String?) ?? 'cash',
+      transactions: json['transactions'] != null
+          ? (json['transactions'] as List)
+              .map((t) => BorrowLendTransactionModel.fromJson(Map<String, dynamic>.from(t)))
+              .toList()
+          : [],
+    );
+  }
 }

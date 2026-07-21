@@ -18,7 +18,9 @@ class ExpenseViewModel extends ChangeNotifier {
 
   Future<void> loadExpenses() async {
     _isLoading = true;
-    notifyListeners();
+    if (hasListeners) {
+      notifyListeners();
+    }
 
     _expenses = await _expenseRepository.getExpenses();
     _expenses.sort((a, b) => b.date.compareTo(a.date));

@@ -13,6 +13,7 @@ import '../../core/services/savings_recommendation_engine.dart';
 import '../../core/services/debt_optimization_engine.dart';
 import '../../core/services/spendable_wallet_engine.dart';
 import '../../core/services/daily_spending_engine.dart';
+import '../widgets/custom_snackbar.dart';
 
 class AllocationPreviewScreen extends StatefulWidget {
   final IncomeEntity income;
@@ -292,11 +293,10 @@ class _AllocationPreviewScreenState extends State<AllocationPreviewScreen> {
     }
 
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Salary allocation completed & logged successfully.'),
-          backgroundColor: Colors.green,
-        ),
+      AppSnackBar.show(
+        context,
+        message: 'Salary allocation completed & logged successfully.',
+        isError: false,
       );
       Navigator.pop(context); // close preview
     }

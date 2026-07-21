@@ -49,4 +49,24 @@ class BorrowLendTransactionModel extends HiveObject {
       accountId: accountId,
     );
   }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'amount': amount,
+      'type': type,
+      'date': date.toIso8601String(),
+      'accountId': accountId,
+    };
+  }
+
+  factory BorrowLendTransactionModel.fromJson(Map<String, dynamic> json) {
+    return BorrowLendTransactionModel(
+      id: json['id'] as String,
+      amount: (json['amount'] as num).toDouble(),
+      type: json['type'] as String,
+      date: DateTime.parse(json['date'] as String),
+      accountId: (json['accountId'] as String?) ?? 'cash',
+    );
+  }
 }

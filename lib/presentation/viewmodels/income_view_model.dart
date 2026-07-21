@@ -25,7 +25,9 @@ class IncomeViewModel extends ChangeNotifier {
 
   Future<void> loadIncomes() async {
     _isLoading = true;
-    notifyListeners();
+    if (hasListeners) {
+      notifyListeners();
+    }
 
     _incomes = await _incomeRepository.getIncomes();
     _incomes.sort((a, b) => b.date.compareTo(a.date));

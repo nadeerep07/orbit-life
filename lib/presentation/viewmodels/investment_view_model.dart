@@ -75,7 +75,6 @@ class InvestmentViewModel extends ChangeNotifier {
   }
 
   Future<void> deleteInvestment(String id) async {
-    final investment = _investments.firstWhere((inv) => inv.id == id);
     await _repository.deleteInvestment(id);
 
     // Delete transaction to refund the balance automatically

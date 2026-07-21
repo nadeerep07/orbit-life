@@ -26,7 +26,9 @@ class SavingsViewModel extends ChangeNotifier {
   Future<void> loadSavings({bool silent = false}) async {
     if (!silent) {
       _isLoading = true;
-      notifyListeners();
+      if (hasListeners) {
+        notifyListeners();
+      }
     }
 
     _savings = await _savingsRepository.getSavings();
