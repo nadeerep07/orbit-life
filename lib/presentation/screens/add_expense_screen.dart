@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart' as intl;
 import 'package:provider/provider.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../domain/entities/expense_entity.dart';
+import '../../features/credit_card/presentation/blocs/credit_card_bloc.dart';
 import '../viewmodels/accounts_view_model.dart';
 import '../viewmodels/budget_view_model.dart';
 import '../viewmodels/expense_view_model.dart';
@@ -218,10 +220,17 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                 ),
               ),
               items: accountsVM.accounts.map((a) {
+                double displayBalance = a.openingBalance;
+                if (a.id == 'supermoney') {
+                  final ccState = context.watch<CreditCardBloc>().state;
+                  if (ccState is CreditCardLoadedState) {
+                    displayBalance = ccState.account.availableCredit;
+                  }
+                }
                 return DropdownMenuItem(
                   value: a.id,
                   child: Text(
-                    '${a.name} ($currencySymbol${a.openingBalance.toStringAsFixed(0)})',
+                    '${a.name} ($currencySymbol${displayBalance.toStringAsFixed(0)})',
                     style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
                   ),
                 );
@@ -343,11 +352,20 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
       (a) => a.id == _selectedAccount,
       orElse: () => accountsVM.accounts.first,
     );
+    double accountBalance = acc.openingBalance;
+    if (_selectedAccount == 'supermoney') {
+      final ccState = context.read<CreditCardBloc>().state;
+      if (ccState is CreditCardLoadedState) {
+        accountBalance = ccState.account.availableCredit;
+      }
+    }
     final oldAmount = (widget.existingExpense != null && widget.existingExpense!.accountId == _selectedAccount)
         ? widget.existingExpense!.amount
         : 0;
-    if (acc.openingBalance + oldAmount - amount < 0) {
-      _showError('Insufficient account balance.');
+    if (accountBalance + oldAmount - amount < 0) {
+      _showError(_selectedAccount == 'supermoney'
+          ? 'Insufficient available credit.'
+          : 'Insufficient account balance.');
       return;
     }
 

@@ -41,6 +41,11 @@ class CreditCardRepositoryImpl implements CreditCardRepository {
   }
 
   @override
+  Stream<void> watchCreditCardAccount() {
+    return localDataSource.watchCreditCardAccount();
+  }
+
+  @override
   Future<List<FdLotEntity>> getFdLots() async {
     final models = await localDataSource.getFdLots();
     final entities = models.map((m) => m.toEntity()).toList();

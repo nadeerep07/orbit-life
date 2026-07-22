@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:equatable/equatable.dart';
 import '../../domain/entities/credit_card_account_entity.dart';
@@ -47,10 +48,21 @@ class CreditCardErrorState extends CreditCardState {
 // BLoC
 class CreditCardBloc extends Bloc<CreditCardEvent, CreditCardState> {
   final CreditCardRepository repository;
+  StreamSubscription? _subscription;
 
   CreditCardBloc({required this.repository}) : super(CreditCardInitialState()) {
     on<LoadCreditCardAccountEvent>(_onLoadAccount);
     on<UpdateCreditCardAccountEvent>(_onUpdateAccount);
+
+    _subscription = repository.watchCreditCardAccount().listen((_) {
+      add(LoadCreditCardAccountEvent());
+    });
+  }
+
+  @override
+  Future<void> close() {
+    _subscription?.cancel();
+    return super.close();
   }
 
   Future<void> _onLoadAccount(

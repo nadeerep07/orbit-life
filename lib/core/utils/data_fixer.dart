@@ -332,5 +332,12 @@ class DataFixer {
     } catch (e) {
       debugPrint('Error renaming credit card account in data fixer: $e');
     }
+
+    // 6. Force resync balances across credit card & asset channels
+    try {
+      await transactionRepository.recalculateBalances();
+    } catch (e) {
+      debugPrint('Error resyncing balances in DataFixer: $e');
+    }
   }
 }

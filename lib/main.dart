@@ -156,7 +156,10 @@ void main() async {
   final emiTrackerRepository = EmiTrackerRepositoryImpl(localDataSource);
   final borrowLendRepository = BorrowLendRepositoryImpl(localDataSource);
   final investmentRepository = InvestmentRepositoryImpl(localDataSource);
-  final transactionRepository = TransactionRepositoryImpl(localDataSource);
+  final transactionRepository = TransactionRepositoryImpl(
+    localDataSource,
+    creditCardLocalDataSource: creditCardDataSource,
+  );
   final creditCardRepository = CreditCardRepositoryImpl(
     localDataSource: creditCardDataSource,
     transactionRepository: transactionRepository,

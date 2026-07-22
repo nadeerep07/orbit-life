@@ -6,6 +6,7 @@ import '../entities/cashback_transaction_entity.dart';
 abstract class CreditCardRepository {
   Future<CreditCardAccountEntity> getCreditCardAccount();
   Future<void> saveCreditCardAccount(CreditCardAccountEntity account);
+  Stream<void> watchCreditCardAccount();
 
   Future<List<FdLotEntity>> getFdLots();
   Future<FdLotEntity> depositFd({
