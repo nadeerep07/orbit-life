@@ -627,80 +627,186 @@ class DashboardScreen extends StatelessWidget {
   }
 
   Widget _buildRecentFeed(BuildContext context, ExpenseViewModel expenseVM, IncomeViewModel incomeVM) {
-    // Merge latest 2 expenses and 2 incomes
-    final latestExpenses = expenseVM.expenses.take(2).toList();
-    final latestIncomes = incomeVM.incomes.take(2).toList();
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    // Merge latest 3 expenses and 3 incomes
+    final latestExpenses = expenseVM.expenses.take(3).toList();
+    final latestIncomes = incomeVM.incomes.take(3).toList();
 
     final feedItems = <Map<String, dynamic>>[];
     for (var e in latestExpenses) {
-      feedItems.add({'title': e.description.isEmpty ? 'Expense' : e.description, 'amount': e.amount, 'isCredit': false, 'date': e.date});
+      feedItems.add({
+        'title': e.description.isEmpty ? 'Expense' : e.description,
+        'amount': e.amount,
+        'isCredit': false,
+        'date': e.date,
+        'category': e.categoryId.isNotEmpty ? e.categoryId : 'Expense',
+      });
     }
     for (var i in latestIncomes) {
-      feedItems.add({'title': i.source, 'amount': i.amount, 'isCredit': true, 'date': i.date});
+      feedItems.add({
+        'title': i.source,
+        'amount': i.amount,
+        'isCredit': true,
+        'date': i.date,
+        'category': i.source,
+      });
     }
 
     feedItems.sort((a, b) => (b['date'] as DateTime).compareTo(a['date'] as DateTime));
+    final displayItems = feedItems.take(5).toList();
 
     final r = Responsive(context);
+    final cardBg = isDark ? const Color(0xFF1E293B) : Colors.white;
+    final borderColor = isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0);
+    final textPrimary = isDark ? Colors.white : const Color(0xFF0F172A);
+    final textSecondary = isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B);
+
     return Padding(
       padding: EdgeInsets.symmetric(horizontal: r.horizontalPadding, vertical: 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          // Header Row with Activity Pulse Dot
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text(
-                'RECENT LOGS FEED',
-                style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1.2, color: Colors.grey),
+              Row(
+                children: [
+                  Container(
+                    width: 7,
+                    height: 7,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: const Color(0xFF10B981),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFF10B981).withValues(alpha: 0.5),
+                          blurRadius: 6,
+                          spreadRadius: 1,
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    'RECENT LOGS FEED',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 1.1,
+                      color: textSecondary,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text(
+                      '${displayItems.length} Recent',
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                        color: textPrimary,
+                      ),
+                    ),
+                  ),
+                ],
               ),
               GestureDetector(
                 onTap: () => Navigator.pushNamed(context, AppRoutes.allExpenses),
-                child: Text(
-                  'See All',
-                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.primary),
+                child: Row(
+                  children: [
+                    Text(
+                      'See All',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: Theme.of(context).colorScheme.primary,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    Icon(
+                      Icons.arrow_forward_rounded,
+                      size: 14,
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
+                  ],
                 ),
               ),
             ],
           ),
           const SizedBox(height: 12),
-          if (feedItems.isEmpty)
+          if (displayItems.isEmpty)
             Container(
               padding: const EdgeInsets.all(24),
               decoration: BoxDecoration(
-                color: Theme.of(context).dividerColor.withValues(alpha: 0.03),
-                borderRadius: BorderRadius.circular(18),
+                color: cardBg,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: borderColor),
               ),
-              child: const Text('No transactions recorded yet.', textAlign: TextAlign.center, style: TextStyle(color: Colors.grey)),
+              child: Text(
+                'No transactions recorded yet.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: textSecondary, fontSize: 13),
+              ),
             )
           else
             ListView.separated(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
-              itemCount: feedItems.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 8),
+              itemCount: displayItems.length,
+              separatorBuilder: (_, __) => const SizedBox(height: 10),
               itemBuilder: (ctx, idx) {
-                final item = feedItems[idx];
+                final item = displayItems[idx];
                 final isCredit = item['isCredit'] as bool;
+                final title = item['title'] as String;
+                final date = item['date'] as DateTime;
+                final amount = item['amount'] as double;
+                final icon = _getLogIcon(title, isCredit);
+                final accentColors = isCredit
+                    ? const [Color(0xFF10B981), Color(0xFF059669)]
+                    : const [Color(0xFFEF4444), Color(0xFFDC2626)];
+
                 return Container(
                   padding: const EdgeInsets.all(14),
                   decoration: BoxDecoration(
-                    color: Theme.of(context).cardColor,
-                    borderRadius: BorderRadius.circular(18),
-                    border: Border.all(color: Theme.of(context).dividerColor.withValues(alpha: 0.06)),
+                    color: cardBg,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: borderColor, width: 1.2),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.04),
+                        blurRadius: 8,
+                        offset: const Offset(0, 3),
+                      ),
+                    ],
                   ),
                   child: Row(
                     children: [
+                      // Gradient Category Icon Container
                       Container(
                         padding: const EdgeInsets.all(10),
                         decoration: BoxDecoration(
-                          color: (isCredit ? Colors.green : Colors.redAccent).withValues(alpha: 0.1),
-                          shape: BoxShape.circle,
+                          gradient: LinearGradient(
+                            colors: [
+                              accentColors.first.withValues(alpha: 0.15),
+                              accentColors.last.withValues(alpha: 0.05),
+                            ],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(
+                            color: accentColors.first.withValues(alpha: 0.25),
+                          ),
                         ),
                         child: Icon(
-                          isCredit ? Icons.south_west_rounded : Icons.north_east_rounded,
-                          color: isCredit ? Colors.green : Colors.redAccent,
-                          size: 16,
+                          icon,
+                          color: accentColors.first,
+                          size: 20,
                         ),
                       ),
                       const SizedBox(width: 12),
@@ -708,21 +814,45 @@ class DashboardScreen extends StatelessWidget {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(item['title'] as String, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                            const SizedBox(height: 2),
                             Text(
-                              DateFormat('MMM dd, yyyy').format(item['date'] as DateTime),
-                              style: const TextStyle(fontSize: 11, color: Colors.grey),
+                              title,
+                              style: TextStyle(
+                                fontWeight: FontWeight.w800,
+                                fontSize: 14,
+                                color: textPrimary,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 2),
+                            Row(
+                              children: [
+                                Text(
+                                  DateFormat('dd MMM, yyyy').format(date),
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w500,
+                                    color: textSecondary,
+                                  ),
+                                ),
+                              ],
                             ),
                           ],
                         ),
                       ),
-                      Text(
-                        '${isCredit ? '+' : '-'}$currencySymbol${(item['amount'] as double).toStringAsFixed(0)}',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 14,
-                          color: isCredit ? Colors.green : Colors.redAccent,
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                        decoration: BoxDecoration(
+                          color: accentColors.first.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Text(
+                          '${isCredit ? '+' : '-'}${CurrencyFormatter.format(amount)}',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w900,
+                            fontSize: 14,
+                            color: accentColors.first,
+                          ),
                         ),
                       ),
                     ],
@@ -733,6 +863,39 @@ class DashboardScreen extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  IconData _getLogIcon(String title, bool isCredit) {
+    final lower = title.toLowerCase();
+    if (isCredit) {
+      if (lower.contains('salary') || lower.contains('pay') || lower.contains('job')) {
+        return Icons.work_rounded;
+      } else if (lower.contains('free') || lower.contains('gig')) {
+        return Icons.laptop_mac_rounded;
+      } else if (lower.contains('gift') || lower.contains('bonus')) {
+        return Icons.card_giftcard_rounded;
+      } else if (lower.contains('refund') || lower.contains('return')) {
+        return Icons.replay_rounded;
+      } else if (lower.contains('invest') || lower.contains('div')) {
+        return Icons.trending_up_rounded;
+      }
+      return Icons.south_west_rounded;
+    } else {
+      if (lower.contains('food') || lower.contains('eat') || lower.contains('dine') || lower.contains('rest')) {
+        return Icons.restaurant_rounded;
+      } else if (lower.contains('shop') || lower.contains('buy') || lower.contains('cloth')) {
+        return Icons.shopping_bag_rounded;
+      } else if (lower.contains('cab') || lower.contains('auto') || lower.contains('fuel') || lower.contains('uber')) {
+        return Icons.directions_car_rounded;
+      } else if (lower.contains('bill') || lower.contains('elect') || lower.contains('recharge')) {
+        return Icons.bolt_rounded;
+      } else if (lower.contains('med') || lower.contains('health') || lower.contains('doctor')) {
+        return Icons.medical_services_rounded;
+      } else if (lower.contains('movie') || lower.contains('fun') || lower.contains('game')) {
+        return Icons.movie_rounded;
+      }
+      return Icons.arrow_outward_rounded;
+    }
   }
 
   void _showQuickAddSheet(BuildContext context) {

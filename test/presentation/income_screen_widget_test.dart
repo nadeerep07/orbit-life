@@ -53,7 +53,6 @@ class MockAccountRepository implements AccountRepository {
   @override
   Future<void> deleteAccount(String id) async => _accounts.removeWhere((a) => a.id == id);
 
-  @override
   Future<void> updateBalance(String id, double delta) async {}
 }
 

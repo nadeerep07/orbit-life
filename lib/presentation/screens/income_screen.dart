@@ -96,7 +96,8 @@ class _IncomeScreenState extends State<IncomeScreen> {
         elevation: 0,
         centerTitle: true,
       ),
-      body: Center(
+      body: Align(
+        alignment: Alignment.topCenter,
         child: ConstrainedBox(
           constraints: BoxConstraints(maxWidth: r.contentMaxWidth),
           child: SingleChildScrollView(
@@ -403,6 +404,34 @@ class _AddIncomeSheetState extends State<_AddIncomeSheet> {
     }
   }
 
+  Widget _buildIncomeShortcutChip(String label, double increment) {
+    return InkWell(
+      onTap: () {
+        final current = double.tryParse(_amountController.text) ?? 0.0;
+        setState(() {
+          _amountController.text = (current + increment).toStringAsFixed(0);
+        });
+      },
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+        decoration: BoxDecoration(
+          color: Theme.of(context).cardColor,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Theme.of(context).dividerColor.withValues(alpha: 0.1)),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+            color: Theme.of(context).textTheme.bodyMedium?.color,
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final accountsVM = context.watch<AccountsViewModel>();
@@ -490,58 +519,154 @@ class _AddIncomeSheetState extends State<_AddIncomeSheet> {
               ),
             ),
 
-            const SizedBox(height: 20),
-
-            // ── Income Source Dropdown ───────────────────────────────────────
-            DropdownButtonFormField<String>(
-              value: _selectedSource,
-              decoration: InputDecoration(
-                labelText: 'Income Source',
-                prefixIcon: const Icon(Icons.source_rounded, size: 20),
-                filled: true,
-                fillColor: Theme.of(context).cardColor,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(16),
-                  borderSide: BorderSide(color: Theme.of(context).dividerColor.withValues(alpha: 0.1)),
-                ),
+            // ── Quick Amount Shortcut Pills ────────────────────────────────────
+            const SizedBox(height: 14),
+            Text(
+              'QUICK SHORTCUTS',
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 1.0,
+                color: Theme.of(context).textTheme.bodySmall?.color ?? Colors.grey,
               ),
-              items: _sources.map((s) {
-                return DropdownMenuItem(
-                  value: s,
-                  child: Text(s, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
-                );
-              }).toList(),
-              onChanged: (val) {
-                if (val != null) setState(() => _selectedSource = val);
-              },
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                _buildIncomeShortcutChip('+₹5,000', 5000),
+                _buildIncomeShortcutChip('+₹10,000', 10000),
+                _buildIncomeShortcutChip('+₹25,000', 25000),
+                _buildIncomeShortcutChip('+₹50,000', 50000),
+              ],
             ),
 
-            const SizedBox(height: 16),
+            const SizedBox(height: 20),
 
-            // ── Account Selector Dropdown ───────────────────────────────────
-            DropdownButtonFormField<String>(
-              value: _selectedAccountId,
-              decoration: InputDecoration(
-                labelText: 'Deposit to Account',
-                prefixIcon: const Icon(Icons.account_balance_wallet_rounded, size: 20),
-                filled: true,
-                fillColor: Theme.of(context).cardColor,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(16),
-                  borderSide: BorderSide(color: Theme.of(context).dividerColor.withValues(alpha: 0.1)),
-                ),
+            // ── Income Source Category Chips ────────────────────────────────
+            Text(
+              'INCOME SOURCE',
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 1.0,
+                color: Theme.of(context).textTheme.bodySmall?.color ?? Colors.grey,
               ),
-              items: accountsVM.accounts.map((a) {
-                return DropdownMenuItem(
-                  value: a.id,
-                  child: Text(
-                    '${a.name} ($currencySymbol${a.openingBalance.toStringAsFixed(0)})',
-                    style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: _sources.map((s) {
+                final isSelected = _selectedSource == s;
+                return InkWell(
+                  onTap: () => setState(() => _selectedSource = s),
+                  borderRadius: BorderRadius.circular(12),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: isSelected
+                          ? const Color(0xFF047857).withValues(alpha: 0.15)
+                          : Theme.of(context).cardColor,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: isSelected
+                            ? const Color(0xFF047857)
+                            : Theme.of(context).dividerColor.withValues(alpha: 0.1),
+                        width: isSelected ? 1.8 : 1.0,
+                      ),
+                    ),
+                    child: Text(
+                      s,
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+                        color: isSelected ? const Color(0xFF047857) : Theme.of(context).textTheme.bodyMedium?.color,
+                      ),
+                    ),
                   ),
                 );
               }).toList(),
-              onChanged: (val) => setState(() => _selectedAccountId = val),
             ),
+
+            const SizedBox(height: 20),
+
+            // ── Account Picker Label & Cards ─────────────────────────────────
+            Text(
+              'DEPOSIT TO ACCOUNT',
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 1.0,
+                color: Theme.of(context).textTheme.bodySmall?.color ?? Colors.grey,
+              ),
+            ),
+            const SizedBox(height: 8),
+            if (accountsVM.accounts.isNotEmpty)
+              SizedBox(
+                height: 65,
+                child: ListView.builder(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: accountsVM.accounts.length,
+                  itemBuilder: (context, index) {
+                    final a = accountsVM.accounts[index];
+                    final isSelected = _selectedAccountId == a.id;
+                    return GestureDetector(
+                      onTap: () => setState(() => _selectedAccountId = a.id),
+                      child: Container(
+                        width: 140,
+                        margin: const EdgeInsets.only(right: 10),
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: isSelected
+                              ? const Color(0xFF047857).withValues(alpha: 0.15)
+                              : Theme.of(context).cardColor,
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(
+                            color: isSelected
+                                ? const Color(0xFF047857)
+                                : Theme.of(context).dividerColor.withValues(alpha: 0.1),
+                            width: isSelected ? 1.8 : 1.0,
+                          ),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Row(
+                              children: [
+                                Icon(
+                                  Icons.account_balance_wallet_rounded,
+                                  size: 14,
+                                  color: isSelected ? const Color(0xFF047857) : Theme.of(context).iconTheme.color,
+                                ),
+                                const SizedBox(width: 4),
+                                Expanded(
+                                  child: Text(
+                                    a.name,
+                                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              CurrencyFormatter.format(a.openingBalance),
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: Theme.of(context).textTheme.bodySmall?.color,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
 
             const SizedBox(height: 16),
 

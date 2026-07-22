@@ -26,54 +26,150 @@ class _AccountDetailScreenState extends State<AccountDetailScreen> {
 
   void _showSortDialog() {
     final viewModel = context.read<AccountDetailViewModel>();
-    showDialog(
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final cardBg = isDark ? const Color(0xFF0F172A) : Colors.white;
+    final textPrimary = isDark ? Colors.white : const Color(0xFF0F172A);
+    final textSecondary = isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B);
+
+    showModalBottomSheet(
       context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('Sort Transactions'),
-          content: Column(
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        return Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: cardBg,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
+            border: Border.all(
+              color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+            ),
+          ),
+          child: Column(
             mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _SortOptionTile(
+              Center(
+                child: Container(
+                  width: 48,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 20),
+                  decoration: BoxDecoration(
+                    color: isDark ? Colors.white24 : Colors.black12,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              Text(
+                'Sort Transactions',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                  color: textPrimary,
+                ),
+              ),
+              const SizedBox(height: 16),
+              _buildModernSortTile(
                 title: 'Newest First',
-                value: TransactionSortOption.newestFirst,
-                groupValue: viewModel.sortOption,
-                onChanged: (val) {
-                  viewModel.setSortOption(val!);
-                  Navigator.pop(context);
+                subtitle: 'Show most recent transactions top',
+                icon: Icons.calendar_today_rounded,
+                option: TransactionSortOption.newestFirst,
+                currentOption: viewModel.sortOption,
+                onTap: () {
+                  viewModel.setSortOption(TransactionSortOption.newestFirst);
+                  Navigator.pop(ctx);
                 },
+                isDark: isDark,
               ),
-              _SortOptionTile(
+              _buildModernSortTile(
                 title: 'Oldest First',
-                value: TransactionSortOption.oldestFirst,
-                groupValue: viewModel.sortOption,
-                onChanged: (val) {
-                  viewModel.setSortOption(val!);
-                  Navigator.pop(context);
+                subtitle: 'Show earliest transactions first',
+                icon: Icons.history_rounded,
+                option: TransactionSortOption.oldestFirst,
+                currentOption: viewModel.sortOption,
+                onTap: () {
+                  viewModel.setSortOption(TransactionSortOption.oldestFirst);
+                  Navigator.pop(ctx);
                 },
+                isDark: isDark,
               ),
-              _SortOptionTile(
+              _buildModernSortTile(
                 title: 'Highest Amount',
-                value: TransactionSortOption.highestAmount,
-                groupValue: viewModel.sortOption,
-                onChanged: (val) {
-                  viewModel.setSortOption(val!);
-                  Navigator.pop(context);
+                subtitle: 'Sort from highest to lowest amount',
+                icon: Icons.arrow_downward_rounded,
+                option: TransactionSortOption.highestAmount,
+                currentOption: viewModel.sortOption,
+                onTap: () {
+                  viewModel.setSortOption(TransactionSortOption.highestAmount);
+                  Navigator.pop(ctx);
                 },
+                isDark: isDark,
               ),
-              _SortOptionTile(
+              _buildModernSortTile(
                 title: 'Lowest Amount',
-                value: TransactionSortOption.lowestAmount,
-                groupValue: viewModel.sortOption,
-                onChanged: (val) {
-                  viewModel.setSortOption(val!);
-                  Navigator.pop(context);
+                subtitle: 'Sort from lowest to highest amount',
+                icon: Icons.arrow_upward_rounded,
+                option: TransactionSortOption.lowestAmount,
+                currentOption: viewModel.sortOption,
+                onTap: () {
+                  viewModel.setSortOption(TransactionSortOption.lowestAmount);
+                  Navigator.pop(ctx);
                 },
+                isDark: isDark,
               ),
             ],
           ),
         );
       },
+    );
+  }
+
+  Widget _buildModernSortTile({
+    required String title,
+    required String subtitle,
+    required IconData icon,
+    required TransactionSortOption option,
+    required TransactionSortOption currentOption,
+    required VoidCallback onTap,
+    required bool isDark,
+  }) {
+    final bool isSelected = option == currentOption;
+    final primaryColor = Theme.of(context).colorScheme.primary;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      decoration: BoxDecoration(
+        color: isSelected
+            ? primaryColor.withValues(alpha: 0.12)
+            : (isDark ? const Color(0xFF1E293B) : const Color(0xFFF8FAFC)),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isSelected ? primaryColor : (isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0)),
+          width: isSelected ? 1.8 : 1.0,
+        ),
+      ),
+      child: ListTile(
+        onTap: onTap,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        leading: Icon(icon, color: isSelected ? primaryColor : (isDark ? Colors.white70 : const Color(0xFF64748B))),
+        title: Text(
+          title,
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+            color: isSelected ? primaryColor : (isDark ? Colors.white : const Color(0xFF0F172A)),
+          ),
+        ),
+        subtitle: Text(
+          subtitle,
+          style: TextStyle(
+            fontSize: 11,
+            color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+          ),
+        ),
+        trailing: isSelected
+            ? Icon(Icons.check_circle_rounded, color: primaryColor, size: 20)
+            : null,
+      ),
     );
   }
 

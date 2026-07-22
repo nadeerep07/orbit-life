@@ -21,6 +21,7 @@ import '../viewmodels/mileage_view_model.dart';
 import '../viewmodels/service_view_model.dart';
 import '../viewmodels/diet_view_model.dart';
 import '../widgets/developer_diagnostics_sheet.dart';
+import '../widgets/modern_budget_target_dialog.dart';
 import '../../core/services/local_auth_service.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -74,7 +75,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
         elevation: 0,
         backgroundColor: Colors.transparent,
       ),
-      body: Center(
+      body: Align(
+        alignment: Alignment.topCenter,
         child: ConstrainedBox(
           constraints: BoxConstraints(maxWidth: r.contentMaxWidth),
           child: SingleChildScrollView(
@@ -1648,89 +1650,36 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   void _showBudgetDialog(BuildContext context, SettingsViewModel settingsVM) {
-    final ctrl = TextEditingController(text: settingsVM.settings.monthlyBudgetLimit.toString());
-
-    showDialog(
+    ModernBudgetTargetDialog.show(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Set Monthly Budget Limit'),
-        content: TextField(
-          controller: ctrl,
-          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          decoration: const InputDecoration(labelText: 'Monthly Budget Limit'),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-          ElevatedButton(
-            onPressed: () async {
-              final val = double.tryParse(ctrl.text);
-              if (val != null && val >= 0) {
-                await settingsVM.updateMonthlyBudget(val);
-                if (ctx.mounted) Navigator.pop(ctx);
-              }
-            },
-            child: const Text('Save'),
-          ),
-        ],
-      ),
+      type: BudgetTargetType.monthlyBudget,
+      initialValue: settingsVM.settings.monthlyBudgetLimit,
+      onSave: (newVal) async {
+        await settingsVM.updateMonthlyBudget(newVal);
+      },
     );
   }
 
   void _showSavingsGoalDialog(BuildContext context, SettingsViewModel settingsVM) {
-    final ctrl = TextEditingController(text: settingsVM.settings.savingsGoal.toString());
-
-    showDialog(
+    ModernBudgetTargetDialog.show(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Set Savings Goal'),
-        content: TextField(
-          controller: ctrl,
-          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          decoration: const InputDecoration(labelText: 'Savings Goal'),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-          ElevatedButton(
-            onPressed: () async {
-              final val = double.tryParse(ctrl.text);
-              if (val != null && val >= 0) {
-                await settingsVM.updateSavingsGoal(val);
-                if (ctx.mounted) Navigator.pop(ctx);
-              }
-            },
-            child: const Text('Save'),
-          ),
-        ],
-      ),
+      type: BudgetTargetType.savingsGoal,
+      initialValue: settingsVM.settings.savingsGoal,
+      onSave: (newVal) async {
+        await settingsVM.updateSavingsGoal(newVal);
+      },
     );
   }
 
   void _showEmergencyFundGoalDialog(BuildContext context, SettingsViewModel settingsVM) {
-    final ctrl = TextEditingController(text: settingsVM.settings.emergencyFundGoal.toString());
-
-    showDialog(
+    ModernBudgetTargetDialog.show(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Set Emergency Fund Goal'),
-        content: TextField(
-          controller: ctrl,
-          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          decoration: const InputDecoration(labelText: 'Emergency Fund Goal'),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-          ElevatedButton(
-            onPressed: () async {
-              final val = double.tryParse(ctrl.text);
-              if (val != null && val >= 0) {
-                await settingsVM.updateEmergencyFundGoal(val);
-                if (ctx.mounted) Navigator.pop(ctx);
-              }
-            },
-            child: const Text('Save'),
-          ),
-        ],
-      ),
+      type: BudgetTargetType.emergencyFund,
+      initialValue: settingsVM.settings.emergencyFundGoal,
+      monthlyBudgetLimit: settingsVM.settings.monthlyBudgetLimit,
+      onSave: (newVal) async {
+        await settingsVM.updateEmergencyFundGoal(newVal);
+      },
     );
   }
 

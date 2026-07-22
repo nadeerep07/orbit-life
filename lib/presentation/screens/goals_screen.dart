@@ -461,10 +461,10 @@ class _GoalsScreenState extends State<GoalsScreen> {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
     String? selectedAccountId = accountsVM.accounts.isNotEmpty ? accountsVM.accounts.first.id : null;
     final borderColor = isDarkMode ? const Color(0xFF334155) : const Color(0xFFE2E8F0);
-    final inputBorder = OutlineInputBorder(
-      borderRadius: BorderRadius.circular(14),
-      borderSide: BorderSide(color: borderColor),
-    );
+    final cardBg = isDarkMode ? const Color(0xFF0F172A) : Colors.white;
+    final textPrimary = isDarkMode ? Colors.white : const Color(0xFF0F172A);
+    final textSecondary = isDarkMode ? const Color(0xFF94A3B8) : const Color(0xFF64748B);
+    final double remainingTarget = (goal.targetAmount - goal.currentSavings).clamp(0.0, double.infinity);
 
     showModalBottomSheet(
       context: context,
@@ -472,131 +472,260 @@ class _GoalsScreenState extends State<GoalsScreen> {
       backgroundColor: Colors.transparent,
       builder: (ctx) {
         final keyboardOffset = MediaQuery.of(ctx).viewInsets.bottom;
-        final theme = Theme.of(ctx);
         return StatefulBuilder(
           builder: (ctx, setSheetState) => Container(
             padding: EdgeInsets.only(top: 24, left: 20, right: 20, bottom: 24 + keyboardOffset),
             decoration: BoxDecoration(
-              color: isDarkMode ? const Color(0xFF0F172A) : Colors.white,
+              color: cardBg,
               borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
               border: Border.all(color: borderColor, width: 1.2),
             ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Center(
-                  child: Container(
-                    width: 48, height: 4,
-                    decoration: BoxDecoration(
-                      color: isDarkMode ? Colors.white24 : Colors.black12,
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 20),
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(10),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 48, height: 4,
                       decoration: BoxDecoration(
-                        color: theme.colorScheme.primary.withOpacity(0.1),
-                        shape: BoxShape.circle,
+                        color: isDarkMode ? Colors.white24 : Colors.black12,
+                        borderRadius: BorderRadius.circular(2),
                       ),
-                      child: Icon(Icons.flag_rounded, color: theme.colorScheme.primary, size: 18),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('Add Savings', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
-                          Text('Goal: ${goal.name}', style: TextStyle(fontSize: 11, color: isDarkMode ? Colors.white54 : Colors.black54)),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 24),
-                TextField(
-                  controller: ctrl,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  decoration: InputDecoration(
-                    labelText: 'Amount ($currencySymbol)',
-                    prefixIcon: const Icon(Icons.monetization_on_outlined),
-                    border: inputBorder,
-                    enabledBorder: inputBorder,
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(14),
-                      borderSide: BorderSide(color: theme.colorScheme.primary, width: 1.5),
                     ),
                   ),
-                ),
-                const SizedBox(height: 16),
-                if (accountsVM.accounts.isEmpty)
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFEF4444).withOpacity(0.08),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: const Text('No accounts available.', style: TextStyle(color: Color(0xFFEF4444), fontSize: 13)),
-                  )
-                else
-                  DropdownButtonFormField<String>(
+                  const SizedBox(height: 18),
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(
+                            colors: [Color(0xFF10B981), Color(0xFF059669)],
+                          ),
+                          borderRadius: BorderRadius.circular(16),
+                          boxShadow: [
+                            BoxShadow(
+                              color: const Color(0xFF10B981).withValues(alpha: 0.3),
+                              blurRadius: 8,
+                              offset: const Offset(0, 3),
+                            ),
+                          ],
+                        ),
+                        child: const Icon(Icons.savings_rounded, color: Colors.white, size: 22),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Deposit to Goal', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: textPrimary)),
+                            const SizedBox(height: 2),
+                            Text('${goal.name} (Remaining: ${CurrencyFormatter.format(remainingTarget)})', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: textSecondary)),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+
+                  // Quick Shortcut Chips
+                  Text(
+                    'QUICK DEPOSIT SHORTCUTS',
+                    style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, letterSpacing: 1.0, color: textSecondary),
+                  ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      _buildGoalShortcutChip('+₹500', 500, ctrl, setSheetState, isDarkMode, textPrimary),
+                      _buildGoalShortcutChip('+₹1,000', 1000, ctrl, setSheetState, isDarkMode, textPrimary),
+                      _buildGoalShortcutChip('+₹5,000', 5000, ctrl, setSheetState, isDarkMode, textPrimary),
+                      if (remainingTarget > 0)
+                        InkWell(
+                          onTap: () {
+                            setSheetState(() {
+                              ctrl.text = remainingTarget.toStringAsFixed(0);
+                            });
+                          },
+                          borderRadius: BorderRadius.circular(12),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF10B981).withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: const Color(0xFF10B981), width: 1),
+                            ),
+                            child: const Text(
+                              'Full Target',
+                              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: Color(0xFF10B981)),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 18),
+
+                  // Amount Input Field
+                  TextField(
+                    controller: ctrl,
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: textPrimary),
                     decoration: InputDecoration(
-                      labelText: 'Source Account',
-                      prefixIcon: const Icon(Icons.credit_card_rounded),
-                      border: inputBorder,
-                      enabledBorder: inputBorder,
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(14),
-                        borderSide: BorderSide(color: theme.colorScheme.primary, width: 1.5),
+                      labelText: 'Deposit Amount ($currencySymbol)',
+                      prefixText: '$currencySymbol ',
+                      prefixStyle: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF10B981)),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+
+                  // Account Selector Label
+                  Text(
+                    'DEDUCT FROM ACCOUNT',
+                    style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, letterSpacing: 1.0, color: textSecondary),
+                  ),
+                  const SizedBox(height: 8),
+
+                  // Visual Account Picker Cards
+                  if (accountsVM.accounts.isEmpty)
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFEF4444).withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Text('No accounts available.', style: TextStyle(color: Color(0xFFEF4444), fontSize: 13)),
+                    )
+                  else
+                    SizedBox(
+                      height: 65,
+                      child: ListView.builder(
+                        scrollDirection: Axis.horizontal,
+                        itemCount: accountsVM.accounts.length,
+                        itemBuilder: (context, index) {
+                          final a = accountsVM.accounts[index];
+                          final isSelected = selectedAccountId == a.id;
+                          return GestureDetector(
+                            onTap: () => setSheetState(() => selectedAccountId = a.id),
+                            child: Container(
+                              width: 140,
+                              margin: const EdgeInsets.only(right: 10),
+                              padding: const EdgeInsets.all(10),
+                              decoration: BoxDecoration(
+                                color: isSelected
+                                    ? const Color(0xFF10B981).withValues(alpha: 0.15)
+                                    : (isDarkMode ? const Color(0xFF1E293B) : const Color(0xFFF8FAFC)),
+                                borderRadius: BorderRadius.circular(14),
+                                border: Border.all(
+                                  color: isSelected ? const Color(0xFF10B981) : borderColor,
+                                  width: isSelected ? 1.8 : 1.0,
+                                ),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Icon(Icons.account_balance_wallet_rounded, size: 14, color: isSelected ? const Color(0xFF10B981) : textSecondary),
+                                      const SizedBox(width: 4),
+                                      Expanded(
+                                        child: Text(a.name, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: textPrimary), overflow: TextOverflow.ellipsis),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(CurrencyFormatter.format(a.openingBalance), style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: textSecondary)),
+                                ],
+                              ),
+                            ),
+                          );
+                        },
                       ),
                     ),
-                    isExpanded: true,
-                    value: selectedAccountId,
-                    items: accountsVM.accounts.map((a) => DropdownMenuItem(
-                      value: a.id,
-                      child: Text('${a.name}  ·  $currencySymbol${a.openingBalance.toStringAsFixed(0)}', overflow: TextOverflow.ellipsis),
-                    )).toList(),
-                    onChanged: (val) => setSheetState(() => selectedAccountId = val),
+
+                  const SizedBox(height: 24),
+
+                  Container(
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFF10B981), Color(0xFF059669)],
+                      ),
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFF10B981).withValues(alpha: 0.35),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: ElevatedButton.icon(
+                      onPressed: () {
+                        final val = double.tryParse(ctrl.text);
+                        if (val == null || val <= 0) {
+                          AppSnackBar.show(ctx, message: 'Enter a valid amount.', isError: true);
+                          return;
+                        }
+                        if (selectedAccountId == null) {
+                          AppSnackBar.show(ctx, message: 'Select a source account.', isError: true);
+                          return;
+                        }
+                        final selectedAcc = accountsVM.accounts.firstWhere((a) => a.id == selectedAccountId);
+                        if (selectedAcc.openingBalance < val) {
+                          AppSnackBar.show(context, message: 'Insufficient balance in selected account.', isError: true);
+                          return;
+                        }
+                        context.read<GoalsViewModel>().addSavingsToGoal(goal.id, val, selectedAccountId!);
+                        Navigator.pop(ctx);
+                        AppSnackBar.show(context, message: '$currencySymbol${val.toStringAsFixed(0)} added to "${goal.name}"!', isError: false);
+                      },
+                      icon: const Icon(Icons.check_circle_rounded, color: Colors.white, size: 18),
+                      label: const Text('Confirm Deposit', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: Colors.white)),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.transparent,
+                        shadowColor: Colors.transparent,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      ),
+                    ),
                   ),
-                const SizedBox(height: 24),
-                ElevatedButton(
-                  onPressed: () {
-                    final val = double.tryParse(ctrl.text);
-                    if (val == null || val <= 0) {
-                      AppSnackBar.show(ctx, message: 'Enter a valid amount.', isError: true);
-                      return;
-                    }
-                    if (selectedAccountId == null) {
-                      AppSnackBar.show(ctx, message: 'Select a source account.', isError: true);
-                      return;
-                    }
-                    final selectedAcc = accountsVM.accounts.firstWhere((a) => a.id == selectedAccountId);
-                    if (selectedAcc.openingBalance < val) {
-                      AppSnackBar.show(context, message: 'Insufficient balance in selected account.', isError: true);
-                      return;
-                    }
-                    context.read<GoalsViewModel>().addSavingsToGoal(goal.id, val, selectedAccountId!);
-                    Navigator.pop(ctx);
-                    AppSnackBar.show(context, message: '$currencySymbol${val.toStringAsFixed(0)} added to "${goal.name}"!', isError: false);
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: theme.colorScheme.primary,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                  ),
-                  child: const Text('Confirm Deposit', style: TextStyle(fontWeight: FontWeight.bold)),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         );
       },
+    );
+  }
+
+  Widget _buildGoalShortcutChip(
+    String label,
+    double increment,
+    TextEditingController ctrl,
+    StateSetter setSheetState,
+    bool isDarkMode,
+    Color textPrimary,
+  ) {
+    return InkWell(
+      onTap: () {
+        final current = double.tryParse(ctrl.text) ?? 0.0;
+        setSheetState(() {
+          ctrl.text = (current + increment).toStringAsFixed(0);
+        });
+      },
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+        decoration: BoxDecoration(
+          color: isDarkMode ? const Color(0xFF1E293B) : const Color(0xFFF1F5F9),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: isDarkMode ? const Color(0xFF334155) : const Color(0xFFE2E8F0)),
+        ),
+        child: Text(label, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: textPrimary)),
+      ),
     );
   }
 
