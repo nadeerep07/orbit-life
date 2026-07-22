@@ -3,6 +3,8 @@ import 'package:intl/intl.dart' as intl;
 import 'package:provider/provider.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../domain/entities/expense_entity.dart';
+import '../../domain/entities/account_entity.dart';
+import '../../domain/entities/category_entity.dart';
 import '../../features/credit_card/presentation/blocs/credit_card_bloc.dart';
 import '../viewmodels/accounts_view_model.dart';
 import '../viewmodels/budget_view_model.dart';
@@ -46,8 +48,27 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
     final accountsVM = context.watch<AccountsViewModel>();
     final isEditing = widget.existingExpense != null;
 
-    if (_selectedAccount == null && accountsVM.accounts.isNotEmpty) {
-      _selectedAccount = accountsVM.accounts.first.id;
+    // Build unique accounts & categories maps to guarantee zero duplicates and prevent dropdown assertion crashes
+    final Map<String, AccountEntity> uniqueAccountsMap = {};
+    for (var a in accountsVM.accounts) {
+      uniqueAccountsMap[a.id] = a;
+    }
+    final List<AccountEntity> dropdownAccounts = uniqueAccountsMap.values.toList();
+
+    if (_selectedAccount != null && !uniqueAccountsMap.containsKey(_selectedAccount)) {
+      _selectedAccount = dropdownAccounts.isNotEmpty ? dropdownAccounts.first.id : null;
+    } else if (_selectedAccount == null && dropdownAccounts.isNotEmpty) {
+      _selectedAccount = dropdownAccounts.first.id;
+    }
+
+    final Map<String, CategoryEntity> uniqueCategoriesMap = {};
+    for (var c in budgetVM.categories) {
+      uniqueCategoriesMap[c.id] = c;
+    }
+    final List<CategoryEntity> dropdownCategories = uniqueCategoriesMap.values.toList();
+
+    if (_selectedCategory != null && !uniqueCategoriesMap.containsKey(_selectedCategory)) {
+      _selectedCategory = dropdownCategories.isNotEmpty ? dropdownCategories.first.id : null;
     }
 
     return Scaffold(
@@ -195,8 +216,8 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                   borderSide: BorderSide(color: Theme.of(context).dividerColor.withValues(alpha: 0.1)),
                 ),
               ),
-              items: budgetVM.categories.map((c) {
-                return DropdownMenuItem(
+              items: dropdownCategories.map<DropdownMenuItem<String>>((c) {
+                return DropdownMenuItem<String>(
                   value: c.id,
                   child: Text(c.name, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
                 );
@@ -219,7 +240,7 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                   borderSide: BorderSide(color: Theme.of(context).dividerColor.withValues(alpha: 0.1)),
                 ),
               ),
-              items: accountsVM.accounts.map((a) {
+              items: dropdownAccounts.map<DropdownMenuItem<String>>((a) {
                 double displayBalance = a.openingBalance;
                 if (a.id == 'supermoney') {
                   final ccState = context.watch<CreditCardBloc>().state;
@@ -227,7 +248,7 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                     displayBalance = ccState.account.availableCredit;
                   }
                 }
-                return DropdownMenuItem(
+                return DropdownMenuItem<String>(
                   value: a.id,
                   child: Text(
                     '${a.name} ($currencySymbol${displayBalance.toStringAsFixed(0)})',

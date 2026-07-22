@@ -30,8 +30,11 @@ import '../../presentation/screens/investment_detail_screen.dart';
 import '../../domain/entities/investment_entity.dart';
 import '../../domain/entities/account_entity.dart';
 
+import '../../features/onboarding/presentation/screens/onboarding_wizard_screen.dart';
+
 class AppRoutes {
   static const String dashboard = '/';
+  static const String onboarding = '/onboarding';
   static const String addExpense = '/addExpense';
   static const String budget = '/budget';
   static const String accounts = '/accounts';
@@ -64,6 +67,8 @@ class AppRoutes {
     switch (settings.name) {
       case splash:
         return MaterialPageRoute(builder: (_) => const SplashScreen());
+      case onboarding:
+        return MaterialPageRoute(builder: (_) => const OnboardingWizardScreen());
       case dashboard:
         return MaterialPageRoute(builder: (_) => const DashboardScreen());
       case addExpense:

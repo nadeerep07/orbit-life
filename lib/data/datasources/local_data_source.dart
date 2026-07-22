@@ -182,27 +182,7 @@ class HiveDataSourceImpl implements LocalDataSource {
 
     if (hasMigrated) return; // Already migrated
 
-    // 1. Setup Default Accounts if not exists
-    if (_accountBox.isEmpty) {
-      final defaultAccounts = [
-        AccountModel(id: 'sbi', name: 'SBI', openingBalance: 0),
-        AccountModel(id: 'hdfc', name: 'HDFC', openingBalance: 0),
-        AccountModel(
-          id: 'airtel',
-          name: 'Airtel Payment Bank',
-          openingBalance: 0,
-        ),
-        AccountModel(
-          id: 'supermoney',
-          name: 'Credit Card',
-          openingBalance: 0,
-        ),
-        AccountModel(id: 'cash', name: 'Cash', openingBalance: 0),
-      ];
-      for (var acc in defaultAccounts) {
-        await _accountBox.put(acc.id, acc);
-      }
-    }
+    // 1. Setup Default Accounts if not exists (Removed hardcoded defaults for onboarding wizard)
 
     // 2. Migrate existing expenses to 'cash' account if they don't have one
     final allExpenses = _expenseBox.values.toList();

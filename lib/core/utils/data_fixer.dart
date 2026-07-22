@@ -6,8 +6,9 @@ import '../../data/models/borrow_lend_model.dart';
 import '../../data/models/borrow_lend_transaction_model.dart';
 import '../../data/models/account_model.dart';
 import '../../data/models/transaction_model.dart';
+import '../../data/models/expense_model.dart';
+import '../../data/models/income_model.dart';
 import '../../features/credit_card/data/models/credit_card_account_model.dart';
-import '../../features/credit_card/data/models/fd_lot_model.dart';
 
 class DataFixer {
   static Future<void> runFixes(
@@ -238,56 +239,8 @@ class DataFixer {
       }
     }
 
-    // 4. Run Credit Card & FD Lot Migration: Seed initial SuperMoney credit card & FD lot non-destructively
-    final bool isCreditCardMigrated = settingsBox.get(
-      'migration_credit_card_v1',
-      defaultValue: false,
-    );
-
-    if (!isCreditCardMigrated) {
-      try {
-        final ccBox = await Hive.openBox<CreditCardAccountModel>('credit_card_account_box');
-        final fdBox = await Hive.openBox<FdLotModel>('fd_lots_box');
-
-        final initialCc = CreditCardAccountModel(
-          id: 'supermoney',
-          name: 'Credit Card',
-          creditLimit: 21204.0,
-          availableCredit: 6790.0,
-          usedCredit: 14414.0,
-          cashbackPending: 371.38,
-          cashbackAvailable: 166.08,
-          cashbackRedeemed: 741.92,
-          lifetimeCashback: 1279.38,
-          statementDateDay: 1,
-          dueDateDay: 15,
-          initialCreditMigrated: true,
-          lastUpdated: DateTime.now(),
-        );
-        await ccBox.put('supermoney_account', initialCc);
-
-        if (fdBox.isEmpty) {
-          final now = DateTime.now();
-          final initialFd = FdLotModel(
-            id: 'fd_initial_seeded',
-            principal: 23560.0,
-            currentValue: 24016.39,
-            depositDate: now.subtract(const Duration(days: 120)),
-            maturityDate: now.add(const Duration(days: 245)),
-            lockUntil: now.subtract(const Duration(days: 113)),
-            interestRate: 6.0,
-            status: 'active',
-            autoRenew: true,
-            remarks: 'Initial FD Seed',
-          );
-          await fdBox.put('fd_initial_seeded', initialFd);
-        }
-
-        await settingsBox.put('migration_credit_card_v1', true);
-      } catch (e) {
-        debugPrint('Error running Credit Card migration: $e');
-      }
-    }
+    // 4. Mark credit card migration flag as completed without seeding mock data
+    await settingsBox.put('migration_credit_card_v1', true);
 
     // 5. Ensure existing stored credit card accounts are named 'Credit Card'
     try {
@@ -333,7 +286,52 @@ class DataFixer {
       debugPrint('Error renaming credit card account in data fixer: $e');
     }
 
-    // 6. Force resync balances across credit card & asset channels
+    // 6. Clean up false onboarding income and expense commitment records
+    try {
+      if (await Hive.boxExists('expenses')) {
+        final expensesBox = await Hive.openBox<ExpenseModel>('expenses');
+        final keysToRemove = <dynamic>[];
+        for (var key in expensesBox.keys) {
+          final exp = expensesBox.get(key);
+          if (exp != null && exp.description.contains('(Recurring Monthly)')) {
+            keysToRemove.add(key);
+          }
+        }
+        for (var k in keysToRemove) {
+          await expensesBox.delete(k);
+        }
+      }
+      if (await Hive.boxExists('incomeBox')) {
+        final incomeBox = await Hive.openBox<IncomeModel>('incomeBox');
+        final keysToRemove = <dynamic>[];
+        for (var key in incomeBox.keys) {
+          final inc = incomeBox.get(key);
+          if (inc != null && (inc.description.contains('(Monthly)') || inc.description.contains('(Weekly)') || inc.description.contains('(Biweekly)'))) {
+            keysToRemove.add(key);
+          }
+        }
+        for (var k in keysToRemove) {
+          await incomeBox.delete(k);
+        }
+      }
+      if (await Hive.boxExists('transactions_box')) {
+        final txBox = await Hive.openBox<TransactionModel>('transactions_box');
+        final keysToRemove = <dynamic>[];
+        for (var key in txBox.keys) {
+          final tx = txBox.get(key);
+          if (tx != null && (tx.description.contains('(Recurring Monthly)') || (tx.type == 'income' && (tx.description.contains('(Monthly)') || tx.description.contains('(Weekly)') || tx.description.contains('(Biweekly)'))))) {
+            keysToRemove.add(key);
+          }
+        }
+        for (var k in keysToRemove) {
+          await txBox.delete(k);
+        }
+      }
+    } catch (e) {
+      debugPrint('Error cleaning false onboarding records: $e');
+    }
+
+    // 7. Force resync balances across credit card & asset channels
     try {
       await transactionRepository.recalculateBalances();
     } catch (e) {

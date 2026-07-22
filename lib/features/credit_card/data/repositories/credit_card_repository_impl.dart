@@ -26,8 +26,7 @@ class CreditCardRepositoryImpl implements CreditCardRepository {
   Future<CreditCardAccountEntity> getCreditCardAccount() async {
     final model = await localDataSource.getCreditCardAccount();
     if (model == null) {
-      // Seed default account matching exact migration specifications
-      final initial = CreditCardAccountEntity.initialSeeded();
+      final initial = CreditCardAccountEntity.zero();
       await saveCreditCardAccount(initial);
       return initial;
     }

@@ -21,36 +21,37 @@ class CreditCardAccountEntity extends Equatable {
     required this.creditLimit,
     required this.availableCredit,
     required this.usedCredit,
-    this.cashbackPending = 371.38,
-    this.cashbackAvailable = 166.08,
-    this.cashbackRedeemed = 741.92,
-    this.lifetimeCashback = 1279.38,
+    this.cashbackPending = 0.0,
+    this.cashbackAvailable = 0.0,
+    this.cashbackRedeemed = 0.0,
+    this.lifetimeCashback = 0.0,
     this.statementDateDay = 1,
     this.dueDateDay = 15,
     this.initialCreditMigrated = true,
     required this.lastUpdated,
   });
 
-  /// Default initial seeded state matching exact user parameters:
-  /// Limit: ₹21,204 | Used: ₹14,414 | Available: ₹6,790
-  /// Lifetime Cashback: ₹1,279.38 | Redeemed: ₹741.92 | Pending (On the way): ₹371.38 | Redeemable: ₹166.08
-  factory CreditCardAccountEntity.initialSeeded() {
+  /// Default initial zero-balance credit card state.
+  factory CreditCardAccountEntity.zero() {
     return CreditCardAccountEntity(
       id: 'supermoney',
       name: 'Credit Card',
-      creditLimit: 21204.0,
-      availableCredit: 6790.0,
-      usedCredit: 14414.0,
-      cashbackPending: 371.38,
-      cashbackAvailable: 166.08,
-      cashbackRedeemed: 741.92,
-      lifetimeCashback: 1279.38,
+      creditLimit: 0.0,
+      availableCredit: 0.0,
+      usedCredit: 0.0,
+      cashbackPending: 0.0,
+      cashbackAvailable: 0.0,
+      cashbackRedeemed: 0.0,
+      lifetimeCashback: 0.0,
       statementDateDay: 1,
       dueDateDay: 15,
       initialCreditMigrated: true,
       lastUpdated: DateTime.now(),
     );
   }
+
+  /// Alias for backward compatibility returning zero state
+  factory CreditCardAccountEntity.initialSeeded() => CreditCardAccountEntity.zero();
 
   /// Calculates the next due date based on statement cutoff cycle.
   /// Transactions after statement cutoff date (e.g. July 1st) settle in the following month (e.g. August 15th).

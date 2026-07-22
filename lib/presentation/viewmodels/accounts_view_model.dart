@@ -75,30 +75,6 @@ class AccountsViewModel extends ChangeNotifier {
       _accounts[superMoneyIdx] = updated;
     }
 
-    // Setup predefined accounts if none exist
-    if (_accounts.isEmpty) {
-      final defaults = [
-        const AccountEntity(id: 'sbi', name: 'SBI', openingBalance: 0),
-        const AccountEntity(id: 'hdfc', name: 'HDFC', openingBalance: 0),
-        const AccountEntity(
-          id: 'airtel',
-          name: 'Airtel Payment Bank',
-          openingBalance: 0,
-        ),
-        const AccountEntity(
-          id: 'supermoney',
-          name: 'Credit Card',
-          openingBalance: 0,
-        ),
-        const AccountEntity(id: 'cash', name: 'Cash', openingBalance: 0),
-      ];
-
-      for (var acc in defaults) {
-        await _accountRepository.addAccount(acc);
-      }
-      _accounts = defaults;
-    }
-
     _isLoading = false;
     notifyListeners();
   }
