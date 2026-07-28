@@ -7,6 +7,7 @@ class EmiTrackerEntity extends Equatable {
   final double totalAmount;
   final String notes;
   final DateTime startDate;
+  final String accountId;
 
   /// true = Pay Later / Credit Card (one-time payment by dueDate)
   /// false = EMI (monthly installments)
@@ -38,6 +39,7 @@ class EmiTrackerEntity extends Equatable {
     this.dueDate,
     this.isPaid = false,
     this.isReminderEnabled = false,
+    this.accountId = 'cash',
   });
 
   // --- Computed (EMI mode) ---
@@ -71,5 +73,6 @@ class EmiTrackerEntity extends Equatable {
     dueDate,
     isPaid,
     isReminderEnabled,
+    accountId,
   ];
 }

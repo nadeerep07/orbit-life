@@ -4,7 +4,7 @@ import 'package:intl/intl.dart';
 import '../theme/app_theme.dart';
 import '../viewmodels/transfer_view_model.dart';
 import '../viewmodels/accounts_view_model.dart';
-
+import '../widgets/custom_snackbar.dart';
 class TransferHistoryScreen extends StatefulWidget {
   const TransferHistoryScreen({super.key});
 
@@ -77,9 +77,10 @@ class _TransferHistoryScreenState extends State<TransferHistoryScreen> {
 
                     onDismissed: (_) {
                       transferVM.deleteTransfer(t);
-
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Transfer deleted')),
+                      AppSnackBar.show(
+                        context,
+                        message: 'Transfer deleted',
+                        isError: false,
                       );
                     },
 

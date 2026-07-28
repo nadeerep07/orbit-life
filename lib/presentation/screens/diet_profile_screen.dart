@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../theme/app_theme.dart';
 import '../viewmodels/diet_view_model.dart';
+import '../widgets/custom_snackbar.dart';
 
 class DietProfileScreen extends StatefulWidget {
   const DietProfileScreen({super.key});
@@ -131,7 +132,7 @@ class _DietProfileScreenState extends State<DietProfileScreen> {
                   ),
                   const SizedBox(height: 16),
                   DropdownButtonFormField<String>(
-                    value: _activityLevel,
+                    initialValue: _activityLevel,
                     decoration: const InputDecoration(
                       labelText: 'Activity Level',
                     ),
@@ -142,7 +143,7 @@ class _DietProfileScreenState extends State<DietProfileScreen> {
                   ),
                   const SizedBox(height: 16),
                   DropdownButtonFormField<String>(
-                    value: _goal,
+                    initialValue: _goal,
                     decoration: const InputDecoration(labelText: 'Target Goal'),
                     items: _goals.map((g) {
                       return DropdownMenuItem(value: g, child: Text(g));
@@ -183,11 +184,10 @@ class _DietProfileScreenState extends State<DietProfileScreen> {
     final age = int.tryParse(_ageController.text) ?? 0;
 
     if (weight <= 0 || height <= 0 || age <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('Please enter valid physical details'),
-          backgroundColor: Theme.of(context).colorScheme.error,
-        ),
+      AppSnackBar.show(
+        context,
+        message: 'Please enter valid physical details',
+        isError: true,
       );
       return;
     }

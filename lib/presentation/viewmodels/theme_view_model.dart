@@ -5,7 +5,7 @@ class ThemeViewModel extends ChangeNotifier {
   static const String _boxName = 'settingsBox';
   static const String _themeKey = 'themeMode';
 
-  ThemeMode _themeMode = ThemeMode.system;
+  ThemeMode _themeMode = ThemeMode.dark;
   ThemeMode get themeMode => _themeMode;
 
   ThemeViewModel() {
@@ -13,15 +13,19 @@ class ThemeViewModel extends ChangeNotifier {
   }
 
   void _loadTheme() {
-    var box = Hive.box(_boxName);
-    var savedTheme = box.get(_themeKey);
-    if (savedTheme == 'light') {
-      _themeMode = ThemeMode.light;
-    } else if (savedTheme == 'dark') {
-      _themeMode = ThemeMode.dark;
-    } else {
-      _themeMode = ThemeMode.system;
-    }
+    try {
+      if (Hive.isBoxOpen(_boxName)) {
+        var box = Hive.box(_boxName);
+        var savedTheme = box.get(_themeKey);
+        if (savedTheme == 'light') {
+          _themeMode = ThemeMode.light;
+        } else if (savedTheme == 'dark') {
+          _themeMode = ThemeMode.dark;
+        } else {
+          _themeMode = ThemeMode.system;
+        }
+      }
+    } catch (_) {}
     notifyListeners();
   }
 
@@ -29,15 +33,19 @@ class ThemeViewModel extends ChangeNotifier {
     _themeMode = mode;
     notifyListeners();
 
-    var box = Hive.box(_boxName);
-    String themeString;
-    if (mode == ThemeMode.light) {
-      themeString = 'light';
-    } else if (mode == ThemeMode.dark) {
-      themeString = 'dark';
-    } else {
-      themeString = 'system';
-    }
-    await box.put(_themeKey, themeString);
+    try {
+      if (Hive.isBoxOpen(_boxName)) {
+        var box = Hive.box(_boxName);
+        String themeString;
+        if (mode == ThemeMode.light) {
+          themeString = 'light';
+        } else if (mode == ThemeMode.dark) {
+          themeString = 'dark';
+        } else {
+          themeString = 'system';
+        }
+        await box.put(_themeKey, themeString);
+      }
+    } catch (_) {}
   }
 }

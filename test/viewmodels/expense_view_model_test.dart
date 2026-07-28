@@ -1,6 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:my_budget_pro/domain/entities/expense_entity.dart';
+import 'package:my_budget_pro/domain/entities/transaction_entity.dart';
 import 'package:my_budget_pro/domain/repositories/expense_repository.dart';
+import 'package:my_budget_pro/domain/repositories/transaction_repository.dart';
 import 'package:my_budget_pro/presentation/viewmodels/expense_view_model.dart';
 
 class MockExpenseRepository implements ExpenseRepository {
@@ -40,14 +42,54 @@ class MockExpenseRepository implements ExpenseRepository {
   }
 }
 
+class MockTransactionRepository implements TransactionRepository {
+  final List<TransactionEntity> _transactions = [];
+
+  @override
+  Future<List<TransactionEntity>> getAllTransactions() async => _transactions;
+
+  @override
+  Future<List<TransactionEntity>> getTransactionsByAccount(String accountId) async {
+    return _transactions.where((t) => t.accountId == accountId || t.targetAccountId == accountId).toList();
+  }
+
+  @override
+  Future<void> addTransaction(TransactionEntity transaction) async {
+    _transactions.add(transaction);
+  }
+
+  @override
+  Future<void> updateTransaction(TransactionEntity transaction) async {
+    final index = _transactions.indexWhere((t) => t.id == transaction.id);
+    if (index != -1) {
+      _transactions[index] = transaction;
+    }
+  }
+
+  @override
+  Future<void> deleteTransaction(String transactionId) async {
+    _transactions.removeWhere((t) => t.id == transactionId);
+  }
+
+  @override
+  Future<void> deleteTransactionsByReference(String referenceId) async {
+    _transactions.removeWhere((t) => t.referenceId == referenceId);
+  }
+
+  @override
+  Future<void> recalculateBalances() async {}
+}
+
 void main() {
   group('ExpenseViewModel Tests', () {
     late ExpenseViewModel viewModel;
     late MockExpenseRepository repository;
+    late MockTransactionRepository transactionRepository;
 
     setUp(() {
       repository = MockExpenseRepository();
-      viewModel = ExpenseViewModel(repository);
+      transactionRepository = MockTransactionRepository();
+      viewModel = ExpenseViewModel(repository, transactionRepository);
     });
 
     test('Add expense and calculate total spent in month', () async {

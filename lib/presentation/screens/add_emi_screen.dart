@@ -4,6 +4,8 @@ import 'package:intl/intl.dart';
 import '../../domain/entities/emi_tracker_entity.dart';
 import '../../core/services/notification_service.dart';
 import '../viewmodels/emi_tracker_view_model.dart';
+import '../viewmodels/accounts_view_model.dart';
+import '../widgets/custom_snackbar.dart';
 
 class AddEmiScreen extends StatefulWidget {
   final EmiTrackerEntity? existingEmi;
@@ -26,6 +28,7 @@ class _AddEmiScreenState extends State<AddEmiScreen> {
   DateTime? _dueDate;
   bool _isPayLater = false;
   bool _enableReminder = false;
+  String? _selectedAccountId;
 
   bool get _isEditing => widget.existingEmi != null;
 
@@ -48,6 +51,7 @@ class _AddEmiScreenState extends State<AddEmiScreen> {
         _monthlyEmiController.text = emi.monthlyEmi.toStringAsFixed(0);
         _totalMonthsController.text = emi.totalMonths.toString();
       }
+      _selectedAccountId = emi.accountId;
     }
   }
 
@@ -64,6 +68,12 @@ class _AddEmiScreenState extends State<AddEmiScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final accounts = context.watch<AccountsViewModel>().accounts;
+
+    if (_selectedAccountId == null && accounts.isNotEmpty) {
+      _selectedAccountId = accounts.first.id;
+    }
+
     return Scaffold(
       appBar: AppBar(title: Text(_isEditing ? "Edit Entry" : "Add Entry")),
       body: SingleChildScrollView(
@@ -120,7 +130,9 @@ class _AddEmiScreenState extends State<AddEmiScreen> {
 
             TextField(
               controller: _totalAmountController,
-              keyboardType: TextInputType.number,
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
               decoration: const InputDecoration(
                 labelText: "Total Amount (₹)",
                 hintText: "e.g. 5499",
@@ -132,7 +144,9 @@ class _AddEmiScreenState extends State<AddEmiScreen> {
               const SizedBox(height: 16),
               TextField(
                 controller: _monthlyEmiController,
-                keyboardType: TextInputType.number,
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
                 decoration: const InputDecoration(
                   labelText: "Monthly EMI (₹)",
                   hintText: "e.g. 7000",
@@ -141,7 +155,9 @@ class _AddEmiScreenState extends State<AddEmiScreen> {
               const SizedBox(height: 16),
               TextField(
                 controller: _totalMonthsController,
-                keyboardType: TextInputType.number,
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
                 decoration: const InputDecoration(
                   labelText: "Total Months",
                   hintText: "e.g. 12",
@@ -198,6 +214,21 @@ class _AddEmiScreenState extends State<AddEmiScreen> {
             ],
 
             const SizedBox(height: 8),
+
+            DropdownButtonFormField<String>(
+              decoration: InputDecoration(
+                labelText: _isPayLater ? "Paid for From" : "EMI Paid From",
+              ),
+              initialValue: _selectedAccountId,
+              items: accounts.map((acc) {
+                return DropdownMenuItem(value: acc.id, child: Text(acc.name));
+              }).toList(),
+              onChanged: (val) {
+                setState(() => _selectedAccountId = val);
+              },
+              validator: (v) => v == null ? 'Select an account' : null,
+            ),
+            const SizedBox(height: 16),
 
             TextField(
               controller: _notesController,
@@ -304,12 +335,11 @@ class _AddEmiScreenState extends State<AddEmiScreen> {
     final totalAmount = double.tryParse(_totalAmountController.text) ?? 0;
     final notes = _notesController.text.trim();
 
-    if (title.isEmpty || totalAmount <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text("Please fill name and amount."),
-          backgroundColor: Theme.of(context).colorScheme.error,
-        ),
+    if (title.isEmpty || totalAmount <= 0 || _selectedAccountId == null) {
+      AppSnackBar.show(
+        context,
+        message: "Please fill all required fields.",
+        isError: true,
       );
       return;
     }
@@ -319,11 +349,10 @@ class _AddEmiScreenState extends State<AddEmiScreen> {
       final totalMonths = int.tryParse(_totalMonthsController.text) ?? 0;
 
       if (monthlyEmi <= 0 || totalMonths <= 0) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text("Please fill EMI amount and months."),
-            backgroundColor: Theme.of(context).colorScheme.error,
-          ),
+        AppSnackBar.show(
+          context,
+          message: "Please fill EMI amount and months.",
+          isError: true,
         );
         return;
       }
@@ -342,6 +371,7 @@ class _AddEmiScreenState extends State<AddEmiScreen> {
         notes: notes,
         isPayLater: false,
         isReminderEnabled: _enableReminder,
+        accountId: _selectedAccountId!,
       );
 
       _saveEntity(emi);
@@ -363,6 +393,7 @@ class _AddEmiScreenState extends State<AddEmiScreen> {
         dueDate: _dueDate,
         isPaid: _isEditing ? widget.existingEmi!.isPaid : false,
         isReminderEnabled: _enableReminder,
+        accountId: _selectedAccountId!,
       );
 
       _saveEntity(emi);

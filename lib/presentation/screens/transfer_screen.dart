@@ -6,7 +6,9 @@ import '../theme/app_theme.dart';
 import '../viewmodels/accounts_view_model.dart';
 import '../viewmodels/savings_view_model.dart';
 import '../viewmodels/transfer_view_model.dart';
+import '../../core/utils/currency_formatter.dart';
 import 'transfer_history_screen.dart';
+import '../widgets/custom_snackbar.dart';
 
 class TransferScreen extends StatefulWidget {
   const TransferScreen({super.key});
@@ -59,19 +61,21 @@ class _TransferScreenState extends State<TransferScreen> {
                 children: [
                   TextField(
                     controller: _amountController,
-                    keyboardType: TextInputType.number,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
                     style: TextStyle(
                       fontSize: 32,
                       fontWeight: FontWeight.bold,
                       color: Theme.of(context).colorScheme.primary,
                     ),
-                    decoration: const InputDecoration(
-                      hintText: '₹0',
+                    decoration: InputDecoration(
+                      hintText: '${currencySymbol}0',
                       border: InputBorder.none,
                       enabledBorder: InputBorder.none,
                       focusedBorder: InputBorder.none,
                       fillColor: Colors.transparent,
-                      prefixText: '₹ ',
+                      prefixText: '$currencySymbol ',
                     ),
                   ),
                   const Divider(),
@@ -96,7 +100,7 @@ class _TransferScreenState extends State<TransferScreen> {
                     decoration: const InputDecoration(
                       labelText: 'From Account',
                     ),
-                    value: _fromAccount,
+                    initialValue: _fromAccount,
                     items: allOptions.map((opt) {
                       return DropdownMenuItem(
                         value: opt['id'],
@@ -137,7 +141,7 @@ class _TransferScreenState extends State<TransferScreen> {
                   const SizedBox(height: 16),
                   DropdownButtonFormField<String>(
                     decoration: const InputDecoration(labelText: 'To Account'),
-                    value: _toAccount,
+                    initialValue: _toAccount,
                     items: allOptions.map((opt) {
                       return DropdownMenuItem(
                         value: opt['id'],
@@ -244,20 +248,21 @@ class _TransferScreenState extends State<TransferScreen> {
     await transferVM.addTransfer(transfer);
 
     if (mounted) {
-      ScaffoldMessenger.of(
+      AppSnackBar.show(
         context,
-      ).showSnackBar(const SnackBar(content: Text('Transfer successful!')));
+        message: 'Transfer successful!',
+        isError: false,
+      );
       Navigator.pop(context);
     }
   }
 
   void _showError(String msg) {
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(msg),
-          backgroundColor: Theme.of(context).colorScheme.error,
-        ),
+      AppSnackBar.show(
+        context,
+        message: msg,
+        isError: true,
       );
     }
   }

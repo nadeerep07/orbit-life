@@ -1,12 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart' as intl;
 import 'package:provider/provider.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../domain/entities/expense_entity.dart';
-import '../theme/app_theme.dart';
+import '../../domain/entities/account_entity.dart';
+import '../../domain/entities/category_entity.dart';
+import '../../features/credit_card/presentation/blocs/credit_card_bloc.dart';
 import '../viewmodels/accounts_view_model.dart';
 import '../viewmodels/budget_view_model.dart';
 import '../viewmodels/expense_view_model.dart';
-import '../viewmodels/savings_view_model.dart';
+import '../../core/utils/currency_formatter.dart';
+import '../widgets/custom_snackbar.dart';
+import '../widgets/scanner_preview_dialog.dart';
 
 class AddExpenseScreen extends StatefulWidget {
   final ExpenseEntity? existingExpense;
@@ -22,7 +27,6 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
 
   String? _selectedCategory;
   String? _selectedAccount;
-  bool _isFromSavings = false;
   DateTime _selectedDate = DateTime.now();
 
   @override
@@ -30,11 +34,10 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
     super.initState();
     if (widget.existingExpense != null) {
       final e = widget.existingExpense!;
-      _amountController.text = e.amount.toString();
+      _amountController.text = e.amount == 0 ? '' : e.amount.toStringAsFixed(0);
       _descController.text = e.description;
       _selectedCategory = e.categoryId;
-      _isFromSavings = e.isFromSavings;
-      _selectedAccount = e.isFromSavings ? null : e.accountId;
+      _selectedAccount = e.accountId;
       _selectedDate = e.date;
     }
   }
@@ -43,149 +46,275 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
   Widget build(BuildContext context) {
     final budgetVM = context.watch<BudgetViewModel>();
     final accountsVM = context.watch<AccountsViewModel>();
+    final isEditing = widget.existingExpense != null;
+
+    // Build unique accounts & categories maps to guarantee zero duplicates and prevent dropdown assertion crashes
+    final Map<String, AccountEntity> uniqueAccountsMap = {};
+    for (var a in accountsVM.accounts) {
+      uniqueAccountsMap[a.id] = a;
+    }
+    final List<AccountEntity> dropdownAccounts = uniqueAccountsMap.values.toList();
+
+    if (_selectedAccount != null && !uniqueAccountsMap.containsKey(_selectedAccount)) {
+      _selectedAccount = dropdownAccounts.isNotEmpty ? dropdownAccounts.first.id : null;
+    } else if (_selectedAccount == null && dropdownAccounts.isNotEmpty) {
+      _selectedAccount = dropdownAccounts.first.id;
+    }
+
+    final Map<String, CategoryEntity> uniqueCategoriesMap = {};
+    for (var c in budgetVM.categories) {
+      uniqueCategoriesMap[c.id] = c;
+    }
+    final List<CategoryEntity> dropdownCategories = uniqueCategoriesMap.values.toList();
+
+    if (_selectedCategory != null && !uniqueCategoriesMap.containsKey(_selectedCategory)) {
+      _selectedCategory = dropdownCategories.isNotEmpty ? dropdownCategories.first.id : null;
+    }
 
     return Scaffold(
       appBar: AppBar(
         title: Text(
-          widget.existingExpense == null ? 'Add Expense' : 'Edit Expense',
+          isEditing ? 'Edit Expense' : 'Add Expense',
+          style: const TextStyle(fontWeight: FontWeight.bold),
         ),
+        elevation: 0,
+        actions: [
+          if (!isEditing)
+            IconButton(
+              icon: const Icon(Icons.document_scanner_rounded),
+              tooltip: 'Scan receipt or screenshot',
+              onPressed: () {
+                ScannerPreviewDialog.show(
+                  context,
+                  onScanCompleted: (amount, merchant, date) {
+                    setState(() {
+                      _amountController.text = amount.toStringAsFixed(2);
+                      _descController.text = merchant;
+                      _selectedDate = date;
+                    });
+                  },
+                );
+              },
+            ),
+          const SizedBox(width: 8),
+        ],
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            IOSCard(
+            // ── Hero Amount Card ───────────────────────────────────────────────
+            Container(
+              padding: const EdgeInsets.all(22),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [Color(0xFF1E1E2C), Color(0xFF2A2A3D)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(26),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.3),
+                    blurRadius: 18,
+                    offset: const Offset(0, 8),
+                  ),
+                ],
+              ),
               child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  TextField(
-                    controller: _amountController,
-                    keyboardType: TextInputType.number,
-                    style: const TextStyle(
-                      fontSize: 32,
+                  const Text(
+                    'ENTER AMOUNT',
+                    style: TextStyle(
+                      color: Colors.white60,
+                      fontSize: 10,
                       fontWeight: FontWeight.bold,
-                    ),
-                    decoration: const InputDecoration(
-                      hintText: '₹0',
-                      border: InputBorder.none,
-                      enabledBorder: InputBorder.none,
-                      focusedBorder: InputBorder.none,
-                      fillColor: Colors.transparent,
+                      letterSpacing: 1.2,
                     ),
                   ),
-                  const Divider(),
-                  TextField(
-                    controller: _descController,
-                    decoration: const InputDecoration(
-                      hintText: 'Description',
-                      border: InputBorder.none,
-                      enabledBorder: InputBorder.none,
-                      focusedBorder: InputBorder.none,
-                      fillColor: Colors.transparent,
-                    ),
+                  const SizedBox(height: 10),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.baseline,
+                    textBaseline: TextBaseline.alphabetic,
+                    children: [
+                      Text(
+                        currencySymbol,
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.primary,
+                          fontSize: 34,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: TextField(
+                          controller: _amountController,
+                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 40,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: -0.5,
+                          ),
+                          decoration: const InputDecoration(
+                            hintText: '0',
+                            hintStyle: TextStyle(color: Colors.white30),
+                            border: InputBorder.none,
+                            enabledBorder: InputBorder.none,
+                            focusedBorder: InputBorder.none,
+                            fillColor: Colors.transparent,
+                            isDense: true,
+                            contentPadding: EdgeInsets.zero,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  const Divider(color: Colors.white12),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      const Icon(Icons.notes_rounded, color: Colors.white54, size: 18),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: TextField(
+                          controller: _descController,
+                          style: const TextStyle(color: Colors.white, fontSize: 14),
+                          decoration: const InputDecoration(
+                            hintText: 'What is this expense for? (Optional)',
+                            hintStyle: TextStyle(color: Colors.white38, fontSize: 14),
+                            border: InputBorder.none,
+                            enabledBorder: InputBorder.none,
+                            focusedBorder: InputBorder.none,
+                            fillColor: Colors.transparent,
+                            isDense: true,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
             ),
+
+            const SizedBox(height: 20),
+
+            // ── Category Dropdown ─────────────────────────────────────────────
+            DropdownButtonFormField<String>(
+              value: _selectedCategory,
+              decoration: InputDecoration(
+                labelText: 'Category',
+                prefixIcon: const Icon(Icons.category_rounded, size: 20),
+                filled: true,
+                fillColor: Theme.of(context).cardColor,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: BorderSide(color: Theme.of(context).dividerColor.withValues(alpha: 0.1)),
+                ),
+              ),
+              items: dropdownCategories.map<DropdownMenuItem<String>>((c) {
+                return DropdownMenuItem<String>(
+                  value: c.id,
+                  child: Text(c.name, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+                );
+              }).toList(),
+              onChanged: (val) => setState(() => _selectedCategory = val),
+            ),
+
             const SizedBox(height: 16),
-            IOSCard(
-              child: Column(
-                children: [
-                  DropdownButtonFormField<String>(
-                    decoration: const InputDecoration(labelText: 'Category'),
-                    initialValue: _selectedCategory,
-                    items: budgetVM.categories.map((c) {
-                      return DropdownMenuItem(value: c.id, child: Text(c.name));
-                    }).toList(),
-                    onChanged: (val) => setState(() => _selectedCategory = val),
+
+            // ── Payment Method Dropdown ───────────────────────────────────────
+            DropdownButtonFormField<String>(
+              value: _selectedAccount,
+              decoration: InputDecoration(
+                labelText: 'Payment Method',
+                prefixIcon: const Icon(Icons.account_balance_wallet_rounded, size: 20),
+                filled: true,
+                fillColor: Theme.of(context).cardColor,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: BorderSide(color: Theme.of(context).dividerColor.withValues(alpha: 0.1)),
+                ),
+              ),
+              items: dropdownAccounts.map<DropdownMenuItem<String>>((a) {
+                double displayBalance = a.openingBalance;
+                if (a.id == 'supermoney') {
+                  final ccState = context.watch<CreditCardBloc>().state;
+                  if (ccState is CreditCardLoadedState) {
+                    displayBalance = ccState.account.availableCredit;
+                  }
+                }
+                return DropdownMenuItem<String>(
+                  value: a.id,
+                  child: Text(
+                    '${a.name} ($currencySymbol${displayBalance.toStringAsFixed(0)})',
+                    style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
                   ),
-                  const SizedBox(height: 16),
-                  DropdownButtonFormField<String>(
-                    decoration: const InputDecoration(
-                      labelText: 'Payment Method',
+                );
+              }).toList(),
+              onChanged: (val) => setState(() => _selectedAccount = val),
+            ),
+
+            const SizedBox(height: 16),
+
+            // ── Date Selector ─────────────────────────────────────────────────
+            InkWell(
+              onTap: _pickDate,
+              borderRadius: BorderRadius.circular(16),
+              child: Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).cardColor,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: Theme.of(context).dividerColor.withValues(alpha: 0.1)),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Icon(Icons.calendar_month_rounded, color: Theme.of(context).colorScheme.primary, size: 18),
                     ),
-                    initialValue: _selectedAccount,
-                    items: accountsVM.accounts.map((a) {
-                      return DropdownMenuItem(value: a.id, child: Text(a.name));
-                    }).toList(),
-                    onChanged: _isFromSavings
-                        ? null
-                        : (val) => setState(() => _selectedAccount = val),
-                  ),
-                  const SizedBox(height: 16),
-                  SwitchListTile(
-                    title: const Text('Paid from Savings'),
-                    value: _isFromSavings,
-                    activeThumbColor: Theme.of(context).colorScheme.primary,
-                    onChanged: (val) {
-                      setState(() {
-                        _isFromSavings = val;
-                        if (val) _selectedAccount = null;
-                      });
-                    },
-                  ),
-                  const SizedBox(height: 16),
-                  ListTile(
-                    title: const Text('Date'),
-                    trailing: Text(
-                      intl.DateFormat(
-                        'MMM dd, yyyy - hh:mm a',
-                      ).format(_selectedDate),
+                    const SizedBox(width: 12),
+                    const Text('Transaction Date', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+                    const Spacer(),
+                    Text(
+                      intl.DateFormat('MMM dd, yyyy - hh:mm a').format(_selectedDate),
                       style: TextStyle(
                         color: Theme.of(context).colorScheme.primary,
                         fontWeight: FontWeight.bold,
+                        fontSize: 12,
                       ),
                     ),
-                    onTap: () async {
-                      final date = await showDatePicker(
-                        context: context,
-                        initialDate: _selectedDate,
-                        firstDate: DateTime(2000),
-                        lastDate: DateTime.now(),
-                      );
-                      if (date != null) {
-                        if (!mounted) return;
-                        final time = await showTimePicker(
-                          context: context,
-                          initialTime: TimeOfDay.fromDateTime(_selectedDate),
-                        );
-                        if (time != null) {
-                          setState(() {
-                            _selectedDate = DateTime(
-                              date.year,
-                              date.month,
-                              date.day,
-                              time.hour,
-                              time.minute,
-                            );
-                          });
-                        }
-                      }
-                    },
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
-            const SizedBox(height: 32),
+
+            const SizedBox(height: 28),
+
+            // ── Action Button ──────────────────────────────────────────────────
             SizedBox(
               width: double.infinity,
-              height: 50,
+              height: 52,
               child: ElevatedButton(
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Theme.of(context).colorScheme.primary,
                   foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
+                  elevation: 2,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                 ),
                 onPressed: _saveExpense,
                 child: Text(
-                  widget.existingExpense == null
-                      ? 'Save Expense'
-                      : 'Update Expense',
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                  ),
+                  isEditing ? 'UPDATE EXPENSE' : 'SAVE EXPENSE',
+                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w900, letterSpacing: 0.8),
                 ),
               ),
             ),
@@ -193,6 +322,33 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
         ),
       ),
     );
+  }
+
+  Future<void> _pickDate() async {
+    final date = await showDatePicker(
+      context: context,
+      initialDate: _selectedDate,
+      firstDate: DateTime(2000),
+      lastDate: DateTime.now(),
+    );
+    if (date != null) {
+      if (!mounted) return;
+      final time = await showTimePicker(
+        context: context,
+        initialTime: TimeOfDay.fromDateTime(_selectedDate),
+      );
+      if (time != null) {
+        setState(() {
+          _selectedDate = DateTime(
+            date.year,
+            date.month,
+            date.day,
+            time.hour,
+            time.minute,
+          );
+        });
+      }
+    }
   }
 
   void _saveExpense() async {
@@ -205,86 +361,49 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
       _showError('Please select a category.');
       return;
     }
-    if (!_isFromSavings && _selectedAccount == null) {
+    if (_selectedAccount == null) {
       _showError('Please select a payment method.');
       return;
     }
 
     final accountsVM = context.read<AccountsViewModel>();
-    final savingsVM = context.read<SavingsViewModel>();
 
     // Validate Balance constraint
-    // We get current balance and add back the old amount if editing, then subtract the new amount
-    if (_isFromSavings) {
-      final currentBal = savingsVM.savings?.currentBalance ?? 0;
-      final oldAmount =
-          (widget.existingExpense != null &&
-              widget.existingExpense!.isFromSavings)
-          ? widget.existingExpense!.amount
-          : 0;
-      if (currentBal + oldAmount - amount < 0) {
-        _showError('Insufficient savings balance.');
-        return;
+    final acc = accountsVM.accounts.firstWhere(
+      (a) => a.id == _selectedAccount,
+      orElse: () => accountsVM.accounts.first,
+    );
+    double accountBalance = acc.openingBalance;
+    if (_selectedAccount == 'supermoney') {
+      final ccState = context.read<CreditCardBloc>().state;
+      if (ccState is CreditCardLoadedState) {
+        accountBalance = ccState.account.availableCredit;
       }
-    } else {
-      final acc = accountsVM.accounts.firstWhere(
-        (a) => a.id == _selectedAccount,
-      );
-      final oldAmount =
-          (widget.existingExpense != null &&
-              !widget.existingExpense!.isFromSavings &&
-              widget.existingExpense!.accountId == _selectedAccount)
-          ? widget.existingExpense!.amount
-          : 0;
-      if (acc.openingBalance + oldAmount - amount < 0) {
-        _showError('Insufficient account balance.');
-        return;
-      }
+    }
+    final oldAmount = (widget.existingExpense != null && widget.existingExpense!.accountId == _selectedAccount)
+        ? widget.existingExpense!.amount
+        : 0;
+    if (accountBalance + oldAmount - amount < 0) {
+      _showError(_selectedAccount == 'supermoney'
+          ? 'Insufficient available credit.'
+          : 'Insufficient account balance.');
+      return;
     }
 
     final expense = ExpenseEntity(
-      id:
-          widget.existingExpense?.id ??
-          DateTime.now().millisecondsSinceEpoch.toString(),
+      id: widget.existingExpense?.id ?? DateTime.now().millisecondsSinceEpoch.toString(),
       categoryId: _selectedCategory!,
       amount: amount,
       description: _descController.text,
       date: _selectedDate,
-      accountId: _isFromSavings ? 'savings' : _selectedAccount!,
-      isFromSavings: _isFromSavings,
+      accountId: _selectedAccount!,
+      isFromSavings: false,
     );
 
     if (widget.existingExpense != null) {
-      // Reverse previous transaction
-      final old = widget.existingExpense!;
-      if (old.isFromSavings) {
-        await context.read<SavingsViewModel>().addToSavings(old.amount);
-      } else {
-        await context.read<AccountsViewModel>().updateAccountBalance(
-          old.accountId,
-          old.amount,
-        );
-      }
-      // Apply new transaction
       await context.read<ExpenseViewModel>().updateExpense(expense);
-      if (_isFromSavings) {
-        await context.read<SavingsViewModel>().deductFromSavings(amount);
-      } else {
-        await context.read<AccountsViewModel>().updateAccountBalance(
-          _selectedAccount!,
-          -amount,
-        );
-      }
     } else {
       await context.read<ExpenseViewModel>().addExpense(expense);
-      if (_isFromSavings) {
-        await context.read<SavingsViewModel>().deductFromSavings(amount);
-      } else {
-        await context.read<AccountsViewModel>().updateAccountBalance(
-          _selectedAccount!,
-          -amount,
-        );
-      }
     }
 
     if (mounted) Navigator.pop(context);
@@ -292,11 +411,10 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
 
   void _showError(String msg) {
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(msg),
-          backgroundColor: Theme.of(context).colorScheme.error,
-        ),
+      AppSnackBar.show(
+        context,
+        message: msg,
+        isError: true,
       );
     }
   }

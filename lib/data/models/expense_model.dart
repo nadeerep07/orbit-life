@@ -78,4 +78,17 @@ class ExpenseModel extends HiveObject {
       'source': source,
     };
   }
+
+  factory ExpenseModel.fromJson(Map<String, dynamic> json) {
+    return ExpenseModel(
+      id: json['id'] as String,
+      categoryId: json['categoryId'] as String,
+      amount: (json['amount'] as num).toDouble(),
+      description: json['description'] as String? ?? '',
+      date: DateTime.parse(json['date'] as String),
+      accountId: json['accountId'] as String,
+      isFromSavings: json['isFromSavings'] as bool? ?? false,
+      source: json['source'] as String?,
+    );
+  }
 }

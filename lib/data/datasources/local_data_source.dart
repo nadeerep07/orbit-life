@@ -10,6 +10,12 @@ import '../models/goal_model.dart';
 import '../models/service_model.dart';
 import '../models/diet_model.dart';
 import '../models/emi_tracker_model.dart';
+import '../models/borrow_lend_model.dart';
+import '../models/investment_model.dart';
+import '../models/transaction_model.dart';
+import '../models/settings_model.dart';
+import '../../core/services/cloud_sync_service.dart';
+
 
 abstract class LocalDataSource {
   Future<void> init();
@@ -78,6 +84,28 @@ abstract class LocalDataSource {
   Future<void> addEmi(EmiTrackerModel emi);
   Future<void> updateEmi(EmiTrackerModel emi);
   Future<void> deleteEmi(String id);
+
+  // Borrow & Lend
+  Future<List<BorrowLendModel>> getBorrowLends();
+  Future<void> addBorrowLend(BorrowLendModel borrowLend);
+  Future<void> updateBorrowLend(BorrowLendModel borrowLend);
+  Future<void> deleteBorrowLend(String id);
+
+  // Investments
+  Future<List<InvestmentModel>> getInvestments();
+  Future<void> addInvestment(InvestmentModel investment);
+  Future<void> updateInvestment(InvestmentModel investment);
+  Future<void> deleteInvestment(String id);
+
+  // Transactions
+  Future<List<TransactionModel>> getTransactions();
+  Future<void> addTransaction(TransactionModel transaction);
+  Future<void> updateTransaction(TransactionModel transaction);
+  Future<void> deleteTransaction(String id);
+
+  // Settings
+  Future<SettingsModel?> getSettings();
+  Future<void> saveSettings(SettingsModel settings);
 }
 
 class HiveDataSourceImpl implements LocalDataSource {
@@ -93,6 +121,10 @@ class HiveDataSourceImpl implements LocalDataSource {
   late Box<DietProfileModel> _dietProfileBox;
   late Box<MealEntryModel> _mealEntryBox;
   late Box<EmiTrackerModel> _emiTrackerBox;
+  late Box<BorrowLendModel> _borrowLendBox;
+  late Box<InvestmentModel> _investmentBox;
+  late Box<TransactionModel> _transactionBox;
+  late Box<SettingsModel> _appSettingsBox;
 
   @override
   Future<void> init() async {
@@ -108,10 +140,37 @@ class HiveDataSourceImpl implements LocalDataSource {
     _dietProfileBox = await Hive.openBox<DietProfileModel>('dietProfileBox');
     _mealEntryBox = await Hive.openBox<MealEntryModel>('mealEntryBox');
     _emiTrackerBox = await Hive.openBox<EmiTrackerModel>('emiTrackerBox');
+    _borrowLendBox = await Hive.openBox<BorrowLendModel>('borrowLendBox');
+    _investmentBox = await Hive.openBox<InvestmentModel>('investmentBox');
+    _transactionBox = await Hive.openBox<TransactionModel>('transactions_box');
+    _appSettingsBox = await Hive.openBox<SettingsModel>('appSettingsBox');
 
     // Initialize default categories if box is empty
     await _migrateLegacyCategories();
     await _migrateAccountsAndIncomes();
+
+    // 🔄 Auto-Sync to Cloud Firestore whenever local data changes
+    final boxesToWatch = [
+      _categoryBox,
+      _expenseBox,
+      _accountBox,
+      _savingsBox,
+      _incomeBox,
+      _mileageBox,
+      _transferBox,
+      _goalBox,
+      _serviceBox,
+      _dietProfileBox,
+      _mealEntryBox,
+      _emiTrackerBox,
+      _borrowLendBox,
+      _investmentBox,
+      _transactionBox,
+    ];
+
+    for (var box in boxesToWatch) {
+      box.watch().listen((_) => CloudSyncService.triggerSync());
+    }
   }
 
   Future<void> _migrateAccountsAndIncomes() async {
@@ -123,27 +182,7 @@ class HiveDataSourceImpl implements LocalDataSource {
 
     if (hasMigrated) return; // Already migrated
 
-    // 1. Setup Default Accounts if not exists
-    if (_accountBox.isEmpty) {
-      final defaultAccounts = [
-        AccountModel(id: 'sbi', name: 'SBI', openingBalance: 0),
-        AccountModel(id: 'hdfc', name: 'HDFC', openingBalance: 0),
-        AccountModel(
-          id: 'airtel',
-          name: 'Airtel Payment Bank',
-          openingBalance: 0,
-        ),
-        AccountModel(
-          id: 'supermoney',
-          name: 'Super Money Credit Card',
-          openingBalance: 0,
-        ),
-        AccountModel(id: 'cash', name: 'Cash', openingBalance: 0),
-      ];
-      for (var acc in defaultAccounts) {
-        await _accountBox.put(acc.id, acc);
-      }
-    }
+    // 1. Setup Default Accounts if not exists (Removed hardcoded defaults for onboarding wizard)
 
     // 2. Migrate existing expenses to 'cash' account if they don't have one
     final allExpenses = _expenseBox.values.toList();
@@ -483,5 +522,82 @@ class HiveDataSourceImpl implements LocalDataSource {
   @override
   Future<void> deleteEmi(String id) async {
     await _emiTrackerBox.delete(id);
+  }
+
+  // --- Borrow & Lend ---
+  @override
+  Future<List<BorrowLendModel>> getBorrowLends() async {
+    return _borrowLendBox.values.toList()
+      ..sort((a, b) => b.date.compareTo(a.date));
+  }
+
+  @override
+  Future<void> addBorrowLend(BorrowLendModel borrowLend) async {
+    await _borrowLendBox.put(borrowLend.id, borrowLend);
+  }
+
+  @override
+  Future<void> updateBorrowLend(BorrowLendModel borrowLend) async {
+    await _borrowLendBox.put(borrowLend.id, borrowLend);
+  }
+
+  @override
+  Future<void> deleteBorrowLend(String id) async {
+    await _borrowLendBox.delete(id);
+  }
+
+  // --- Investments ---
+  @override
+  Future<List<InvestmentModel>> getInvestments() async {
+    return _investmentBox.values.toList()
+      ..sort((a, b) => b.date.compareTo(a.date));
+  }
+
+  @override
+  Future<void> addInvestment(InvestmentModel investment) async {
+    await _investmentBox.put(investment.id, investment);
+  }
+
+  @override
+  Future<void> updateInvestment(InvestmentModel investment) async {
+    await _investmentBox.put(investment.id, investment);
+  }
+
+  @override
+  Future<void> deleteInvestment(String id) async {
+    await _investmentBox.delete(id);
+  }
+
+  // --- Transactions ---
+  @override
+  Future<List<TransactionModel>> getTransactions() async {
+    return _transactionBox.values.toList();
+  }
+
+  @override
+  Future<void> addTransaction(TransactionModel transaction) async {
+    await _transactionBox.put(transaction.id, transaction);
+  }
+
+  @override
+  Future<void> updateTransaction(TransactionModel transaction) async {
+    await _transactionBox.put(transaction.id, transaction);
+  }
+
+  @override
+  Future<void> deleteTransaction(String id) async {
+    await _transactionBox.delete(id);
+  }
+
+  // --- Settings ---
+  @override
+  Future<SettingsModel?> getSettings() async {
+    if (_appSettingsBox.isEmpty) return null;
+    return _appSettingsBox.get('app_settings');
+  }
+
+  @override
+  Future<void> saveSettings(SettingsModel settings) async {
+    await _appSettingsBox.put('app_settings', settings);
   }
 }
