@@ -124,6 +124,9 @@ async function linkUserChatId(userId, chatId) {
     { merge: true }
   );
 
+  return true;
+}
+
 /**
  * Unlink Telegram Chat ID
  */
@@ -917,4 +920,4 @@ module.exports = {
   getEmisAndDebts,
   saveOnboardingProfile,
   getSummary,
-};
+}
