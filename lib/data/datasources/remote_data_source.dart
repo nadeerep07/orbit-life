@@ -50,7 +50,7 @@ class FirebaseDataSource {
       'fdLots': fdLots,
       'statements': statements,
       'cashbacks': cashbacks,
-    });
+    }, SetOptions(merge: true));
   }
 
   // Restore data

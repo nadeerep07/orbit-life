@@ -59,14 +59,35 @@ async function getUserIdByChatId(chatId) {
   const firestore = getDb();
   const strChatId = String(chatId);
 
-  const snapshot = await firestore
-    .collection("users")
-    .where("telegramChatId", "==", strChatId)
-    .limit(1)
-    .get();
+  // 1. Check dedicated telegram_links collection (indestructible)
+  try {
+    const linkDoc = await firestore.collection("telegram_links").doc(strChatId).get();
+    if (linkDoc.exists && linkDoc.data()?.userId) {
+      return linkDoc.data().userId;
+    }
+  } catch (e) {
+    console.warn("⚠️ telegram_links lookup warning:", e.message);
+  }
 
-  if (!snapshot.empty) {
-    return snapshot.docs[0].id;
+  // 2. Check users collection
+  try {
+    const snapshot = await firestore
+      .collection("users")
+      .where("telegramChatId", "==", strChatId)
+      .limit(1)
+      .get();
+
+    if (!snapshot.empty) {
+      const foundUserId = snapshot.docs[0].id;
+      // Self-heal into telegram_links
+      await firestore.collection("telegram_links").doc(strChatId).set({
+        userId: foundUserId,
+        linkedAt: admin.firestore.FieldValue.serverTimestamp(),
+      }, { merge: true });
+      return foundUserId;
+    }
+  } catch (e) {
+    console.warn("⚠️ users lookup warning:", e.message);
   }
 
   if (process.env.DEFAULT_USER_ID) {
@@ -77,27 +98,32 @@ async function getUserIdByChatId(chatId) {
 }
 
 /**
- * Link Telegram Chat ID to a Firestore User Document
+ * Link Telegram Chat ID to a Firestore User Document permanently
  */
 async function linkUserChatId(userId, chatId) {
   const firestore = getDb();
-  const userRef = firestore.collection("users").doc(userId);
-  const doc = await userRef.get();
+  const strChatId = String(chatId);
 
-  if (!doc.exists) {
-    await userRef.set(
-      {
-        telegramChatId: String(chatId),
-        linkedAt: admin.firestore.FieldValue.serverTimestamp(),
-      },
-      { merge: true }
-    );
-  } else {
-    await userRef.update({
-      telegramChatId: String(chatId),
+  // 1. Save to dedicated telegram_links collection
+  await firestore.collection("telegram_links").doc(strChatId).set(
+    {
+      userId: userId,
+      chatId: strChatId,
       linkedAt: admin.firestore.FieldValue.serverTimestamp(),
-    });
-  }
+    },
+    { merge: true }
+  );
+
+  // 2. Also save to users document
+  const userRef = firestore.collection("users").doc(userId);
+  await userRef.set(
+    {
+      telegramChatId: strChatId,
+      linkedAt: admin.firestore.FieldValue.serverTimestamp(),
+    },
+    { merge: true }
+  );
+
   return true;
 }
 
