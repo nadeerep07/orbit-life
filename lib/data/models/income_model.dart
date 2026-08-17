@@ -67,12 +67,12 @@ class IncomeModel extends HiveObject {
 
   factory IncomeModel.fromJson(Map<String, dynamic> json) {
     return IncomeModel(
-      id: json['id'] as String,
-      source: json['source'] as String,
-      description: json['description'] as String? ?? '',
-      amount: (json['amount'] as num).toDouble(),
-      date: DateTime.parse(json['date'] as String),
-      accountId: json['accountId'] as String,
+      id: (json['id'] as String?) ?? '',
+      source: (json['source'] as String?) ?? 'Income',
+      description: (json['description'] as String?) ?? '',
+      amount: ((json['amount'] ?? 0) as num).toDouble(),
+      date: json['date'] != null ? DateTime.parse(json['date'] as String) : DateTime.now(),
+      accountId: (json['accountId'] as String?) ?? 'default',
     );
   }
 }

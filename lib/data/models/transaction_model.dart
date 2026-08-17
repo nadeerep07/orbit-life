@@ -92,15 +92,15 @@ class TransactionModel extends HiveObject {
 
   factory TransactionModel.fromJson(Map<String, dynamic> json) {
     return TransactionModel(
-      id: json['id'] as String,
-      amount: (json['amount'] as num).toDouble(),
-      type: json['type'] as String,
-      accountId: json['accountId'] as String,
+      id: (json['id'] as String?) ?? '',
+      amount: ((json['amount'] ?? 0) as num).toDouble(),
+      type: (json['type'] as String?) ?? 'expense',
+      accountId: (json['accountId'] as String?) ?? 'default',
       targetAccountId: json['targetAccountId'] as String?,
-      categoryOrSource: json['categoryOrSource'] as String,
-      date: DateTime.parse(json['date'] as String),
-      description: json['description'] as String,
-      referenceId: json['referenceId'] as String,
+      categoryOrSource: (json['categoryOrSource'] as String?) ?? (json['categoryId'] as String?) ?? (json['source'] as String?) ?? 'General',
+      date: json['date'] != null ? DateTime.parse(json['date'] as String) : DateTime.now(),
+      description: (json['description'] as String?) ?? (json['title'] as String?) ?? (json['notes'] as String?) ?? '',
+      referenceId: (json['referenceId'] as String?) ?? '',
     );
   }
 }

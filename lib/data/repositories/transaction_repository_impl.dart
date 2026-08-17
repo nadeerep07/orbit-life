@@ -123,8 +123,7 @@ class TransactionRepositoryImpl implements TransactionRepository {
           }
         }
 
-        const double initialBaseUsedCredit = 14414.0;
-        final double usedCredit = (initialBaseUsedCredit + netTxUsage).clamp(0.0, ccAccountModel.creditLimit);
+        final double usedCredit = (ccAccountModel.usedCredit + netTxUsage).clamp(0.0, ccAccountModel.creditLimit);
         final double availableCredit = (ccAccountModel.creditLimit - usedCredit).clamp(0.0, ccAccountModel.creditLimit);
 
         final updatedCcModel = CreditCardAccountModel(

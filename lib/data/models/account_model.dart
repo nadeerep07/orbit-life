@@ -38,9 +38,9 @@ class AccountModel extends HiveObject {
 
   factory AccountModel.fromJson(Map<String, dynamic> json) {
     return AccountModel(
-      id: json['id'] as String,
-      name: json['name'] as String,
-      openingBalance: (json['openingBalance'] as num).toDouble(),
+      id: (json['id'] as String?) ?? '',
+      name: (json['name'] as String?) ?? 'Account',
+      openingBalance: ((json['openingBalance'] ?? json['balance'] ?? json['initialBalance'] ?? 0) as num).toDouble(),
     );
   }
 }
