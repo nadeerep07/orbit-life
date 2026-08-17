@@ -59,7 +59,6 @@ async function getUserIdByChatId(chatId) {
   const firestore = getDb();
   const strChatId = String(chatId);
 
-  // 1. Check if user document contains telegramChatId field
   const snapshot = await firestore
     .collection("users")
     .where("telegramChatId", "==", strChatId)
@@ -70,7 +69,6 @@ async function getUserIdByChatId(chatId) {
     return snapshot.docs[0].id;
   }
 
-  // 2. Check fallback single user from environment variable
   if (process.env.DEFAULT_USER_ID) {
     return process.env.DEFAULT_USER_ID;
   }
@@ -176,14 +174,29 @@ async function logExpense(userId, { amount, description, category, account, date
     notes: `Logged via Telegram Bot (${source || "manual"})`,
   };
 
-  await userRef.set(
-    {
-      expenses: admin.firestore.FieldValue.arrayUnion(expenseItem),
-      transactions: admin.firestore.FieldValue.arrayUnion(transactionItem),
-      lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
-    },
-    { merge: true }
-  );
+  // If paid via Credit Card, also update Credit Card used limit
+  let updatePayload = {
+    expenses: admin.firestore.FieldValue.arrayUnion(expenseItem),
+    transactions: admin.firestore.FieldValue.arrayUnion(transactionItem),
+    lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
+  };
+
+  if (account && (account.toLowerCase().includes("card") || account.toLowerCase().includes("supermoney"))) {
+    const cc = userData?.creditCardAccount;
+    if (cc) {
+      const currentUsed = Number(cc.usedCredit || 0);
+      const currentLimit = Number(cc.creditLimit || 26713.8);
+      const newUsed = currentUsed + Number(amount);
+      updatePayload.creditCardAccount = {
+        ...cc,
+        usedCredit: newUsed,
+        availableCredit: Math.max(0, currentLimit - newUsed),
+        lastUpdated: new Date().toISOString(),
+      };
+    }
+  }
+
+  await userRef.set(updatePayload, { merge: true });
 
   return expenseItem;
 }
@@ -291,6 +304,340 @@ async function logMileage(userId, { odometer, liters, totalCost, pricePerLiter, 
 }
 
 /**
+ * Mark EMI as Paid
+ */
+async function payEmi(userId, { emiName, amount, accountName }) {
+  const firestore = getDb();
+  const userRef = firestore.collection("users").doc(userId);
+  const userData = await getUserData(userId);
+  const emis = (userData && userData.emis) || [];
+
+  if (emis.length === 0) {
+    throw new Error("No active EMIs found in your profile.");
+  }
+
+  // Fuzzy find EMI by name
+  let targetEmi = emis.find(
+    (e) => (e.title && e.title.toLowerCase().includes(emiName.toLowerCase())) ||
+           (e.loanName && e.loanName.toLowerCase().includes(emiName.toLowerCase()))
+  );
+
+  if (!targetEmi) {
+    targetEmi = emis[0]; // fallback to first EMI
+  }
+
+  const emiAmount = Number(amount || targetEmi.monthlyEmi || targetEmi.amount || 0);
+  const updatedPaidMonths = (targetEmi.paidMonths || 0) + 1;
+  const updatedRemainingMonths = Math.max(0, (targetEmi.totalMonths || targetEmi.remainingMonths || 12) - updatedPaidMonths);
+
+  const updatedEmis = emis.map((e) => {
+    if (e.id === targetEmi.id) {
+      return {
+        ...e,
+        paidMonths: updatedPaidMonths,
+        remainingMonths: updatedRemainingMonths,
+        isPaid: updatedRemainingMonths === 0,
+        lastPaidDate: new Date().toISOString(),
+      };
+    }
+    return e;
+  });
+
+  // Log as Expense
+  const expenseItem = {
+    id: uuidv4(),
+    categoryId: "emi",
+    amount: emiAmount,
+    description: `Paid EMI: ${targetEmi.title || targetEmi.loanName}`,
+    date: new Date().toISOString(),
+    accountId: accountName || targetEmi.accountId || "bank",
+    isFromSavings: false,
+    source: "emi_paid_bot",
+  };
+
+  const transactionItem = {
+    id: uuidv4(),
+    title: `EMI Payment: ${targetEmi.title || targetEmi.loanName}`,
+    amount: emiAmount,
+    date: new Date().toISOString(),
+    type: "expense",
+    categoryId: "emi",
+    accountId: accountName || targetEmi.accountId || "bank",
+    notes: `Marked paid via Telegram Bot (${updatedRemainingMonths} months remaining)`,
+  };
+
+  await userRef.set(
+    {
+      emis: updatedEmis,
+      expenses: admin.firestore.FieldValue.arrayUnion(expenseItem),
+      transactions: admin.firestore.FieldValue.arrayUnion(transactionItem),
+      lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
+    },
+    { merge: true }
+  );
+
+  return {
+    emiTitle: targetEmi.title || targetEmi.loanName,
+    amountPaid: emiAmount,
+    paidMonths: updatedPaidMonths,
+    remainingMonths: updatedRemainingMonths,
+  };
+}
+
+/**
+ * Handle Borrow / Lend update (Repayment or new debt)
+ */
+async function handleDebtUpdate(userId, { personName, amount, type, action, contact }) {
+  const firestore = getDb();
+  const userRef = firestore.collection("users").doc(userId);
+  const userData = await getUserData(userId);
+  const borrowLends = (userData && userData.borrowLends) || [];
+  const now = new Date().toISOString();
+
+  // If action is repayment/settlement
+  if (action === "settle" || action === "repay") {
+    let target = borrowLends.find(
+      (b) => b.personName && b.personName.toLowerCase().includes((personName || "").toLowerCase())
+    );
+
+    if (!target) {
+      throw new Error(`Could not find an active debt record for "${personName}".`);
+    }
+
+    const payAmount = Number(amount || target.amount || 0);
+    const newAmount = Math.max(0, Number(target.amount || 0) - payAmount);
+    const isSettled = newAmount === 0;
+
+    const updatedBorrowLends = borrowLends.map((b) => {
+      if (b.id === target.id) {
+        return {
+          ...b,
+          amount: newAmount,
+          status: isSettled ? "settled" : "pending",
+          isSettled: isSettled,
+          lastUpdated: now,
+        };
+      }
+      return b;
+    });
+
+    // Log transaction
+    const isLend = target.type === "lend";
+    const transactionItem = {
+      id: uuidv4(),
+      title: isLend ? `Repayment from ${target.personName}` : `Debt Repayment to ${target.personName}`,
+      amount: payAmount,
+      date: now,
+      type: isLend ? "income" : "expense",
+      accountId: "cash",
+      notes: `Debt settlement recorded via Telegram (${isSettled ? "Fully Settled" : `₹${newAmount} remaining`})`,
+    };
+
+    const updatePayload = {
+      borrowLends: updatedBorrowLends,
+      transactions: admin.firestore.FieldValue.arrayUnion(transactionItem),
+      lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
+    };
+
+    if (isLend) {
+      updatePayload.incomes = admin.firestore.FieldValue.arrayUnion({
+        id: uuidv4(),
+        source: `Repayment from ${target.personName}`,
+        amount: payAmount,
+        date: now,
+        accountId: "cash",
+      });
+    } else {
+      updatePayload.expenses = admin.firestore.FieldValue.arrayUnion({
+        id: uuidv4(),
+        categoryId: "debts",
+        amount: payAmount,
+        description: `Repaid ${target.personName}`,
+        date: now,
+        accountId: "cash",
+        isFromSavings: false,
+        source: "debt_settle",
+      });
+    }
+
+    await userRef.set(updatePayload, { merge: true });
+
+    return {
+      personName: target.personName,
+      amountSettled: payAmount,
+      remainingDebt: newAmount,
+      isSettled,
+      type: target.type,
+    };
+  }
+
+  // Otherwise, add a new borrow/lend record
+  const debtItem = {
+    id: uuidv4(),
+    personName: personName || "Friend",
+    phoneNumber: contact || "",
+    amount: Number(amount || 0),
+    type: type === "borrow" || type === "borrowed" ? "borrow" : "lend",
+    date: now,
+    note: `Added via Telegram Bot`,
+    status: "pending",
+    accountId: "cash",
+    transactions: [],
+  };
+
+  await userRef.set(
+    {
+      borrowLends: admin.firestore.FieldValue.arrayUnion(debtItem),
+      lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
+    },
+    { merge: true }
+  );
+
+  return {
+    personName: debtItem.personName,
+    amount: debtItem.amount,
+    type: debtItem.type,
+  };
+}
+
+/**
+ * Pay Credit Card Bill
+ */
+async function payCreditCardBill(userId, { amount, accountName }) {
+  const firestore = getDb();
+  const userRef = firestore.collection("users").doc(userId);
+  const userData = await getUserData(userId);
+  const cc = userData?.creditCardAccount;
+
+  if (!cc) {
+    throw new Error("No Credit Card found in your profile.");
+  }
+
+  const payAmount = Number(amount || cc.usedCredit || 0);
+  const currentUsed = Number(cc.usedCredit || 0);
+  const currentLimit = Number(cc.creditLimit || 26713.8);
+  const newUsed = Math.max(0, currentUsed - payAmount);
+  const newAvailable = Math.min(currentLimit, currentLimit - newUsed);
+
+  const updatedCc = {
+    ...cc,
+    usedCredit: newUsed,
+    availableCredit: newAvailable,
+    lastUpdated: new Date().toISOString(),
+  };
+
+  // Log as Expense from Bank account
+  const expenseItem = {
+    id: uuidv4(),
+    categoryId: "credit_card_bill",
+    amount: payAmount,
+    description: `Credit Card Bill Payment (${cc.name || "Supermoney"})`,
+    date: new Date().toISOString(),
+    accountId: accountName || "bank",
+    isFromSavings: false,
+    source: "cc_bill_pay",
+  };
+
+  const transactionItem = {
+    id: uuidv4(),
+    title: `Credit Card Bill Paid`,
+    amount: payAmount,
+    date: new Date().toISOString(),
+    type: "expense",
+    categoryId: "credit_card_bill",
+    accountId: accountName || "bank",
+    notes: `Credit card bill paid via Telegram. Available Limit restored to ₹${newAvailable.toLocaleString("en-IN")}`,
+  };
+
+  await userRef.set(
+    {
+      creditCardAccount: updatedCc,
+      expenses: admin.firestore.FieldValue.arrayUnion(expenseItem),
+      transactions: admin.firestore.FieldValue.arrayUnion(transactionItem),
+      lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
+    },
+    { merge: true }
+  );
+
+  return {
+    amountPaid: payAmount,
+    newUsedCredit: newUsed,
+    newAvailableCredit: newAvailable,
+    totalLimit: currentLimit,
+  };
+}
+
+/**
+ * Get Balances & Net Worth
+ */
+async function getBalances(userId) {
+  const userData = await getUserData(userId);
+  if (!userData) return null;
+
+  const accounts = userData.accounts || [];
+  const expenses = userData.expenses || [];
+  const incomes = userData.incomes || [];
+  const cc = userData.creditCardAccount;
+  const fds = userData.fdLots || [];
+
+  // Calculate live balances
+  const detailedAccounts = accounts.map((a) => {
+    const accIncomes = incomes
+      .filter((i) => i.accountId === a.id)
+      .reduce((sum, i) => sum + (Number(i.amount) || 0), 0);
+    const accExpenses = expenses
+      .filter((e) => e.accountId === a.id)
+      .reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
+    const balance = Number(a.openingBalance || 0) + accIncomes - accExpenses;
+    return {
+      name: a.name,
+      balance: balance,
+    };
+  });
+
+  const totalLiquidCash = detailedAccounts.reduce((sum, a) => sum + a.balance, 0);
+  const totalFdValue = fds.reduce((sum, fd) => sum + (Number(fd.currentValue || fd.principal) || 0), 0);
+
+  return {
+    accounts: detailedAccounts,
+    totalLiquidCash,
+    creditCard: cc ? {
+      name: cc.name || "Supermoney Secured Credit Card",
+      limit: Number(cc.creditLimit || 0),
+      used: Number(cc.usedCredit || 0),
+      available: Number(cc.availableCredit || 0),
+      dueDateDay: cc.dueDateDay || 15,
+    } : null,
+    totalFdValue,
+    netWorth: totalLiquidCash + totalFdValue - (cc ? Number(cc.usedCredit || 0) : 0),
+  };
+}
+
+/**
+ * Get EMIs and Debts List
+ */
+async function getEmisAndDebts(userId) {
+  const userData = await getUserData(userId);
+  if (!userData) return null;
+
+  const emis = (userData.emis || []).map((e) => ({
+    title: e.title || e.loanName || "Loan",
+    monthlyEmi: Number(e.monthlyEmi || e.amount || 0),
+    remainingMonths: Number(e.remainingMonths || e.totalMonths || 0),
+    totalAmount: Number(e.totalAmount || 0),
+  }));
+
+  const borrowLends = (userData.borrowLends || []).filter((b) => !b.isSettled && b.status !== "settled").map((b) => ({
+    personName: b.personName || "Person",
+    amount: Number(b.amount || 0),
+    type: b.type === "borrow" ? "You Owe" : "Owed to You",
+    phoneNumber: b.phoneNumber || "",
+  }));
+
+  return { emis, borrowLends };
+}
+
+/**
  * Save Full Onboarding Data
  */
 async function saveOnboardingProfile(userId, { accounts = [], incomes = [], recurringExpenses = [], emis = [], goals = [], creditCards = [], fixedDeposits = [], borrowLends = [], savingsTarget = null }) {
@@ -389,10 +736,10 @@ async function saveOnboardingProfile(userId, { accounts = [], incomes = [], recu
       dueDateDay: Number(cc.dueDate || cc.dueDateDay || 15),
       initialCreditMigrated: false,
       lastUpdated: now,
-      cashbackPending: Number(cc.cashbackPending || 0.0),
-      cashbackAvailable: Number(cc.cashbackAvailable || 0.0),
-      lifetimeCashback: Number(cc.lifetimeCashback || 0.0),
-      cashbackRedeemed: Number(cc.cashbackRedeemed || 0.0),
+      cashbackPending: 0.0,
+      cashbackAvailable: 0.0,
+      lifetimeCashback: 0.0,
+      cashbackRedeemed: 0.0,
     };
   }
 
@@ -489,6 +836,13 @@ async function getSummary(userId) {
   const monthIncomes = incomes.filter((i) => i.date && i.date.startsWith(currentMonthStr));
   const monthEarned = monthIncomes.reduce((sum, i) => sum + (Number(i.amount) || 0), 0);
 
+  // Category breakdown
+  const categoryMap = {};
+  for (const exp of monthExpenses) {
+    const cat = exp.categoryId || "general";
+    categoryMap[cat] = (categoryMap[cat] || 0) + (Number(exp.amount) || 0);
+  }
+
   // Today's meals
   const todayMeals = mealEntries.filter((m) => m.date && m.date.startsWith(todayStr));
   const todayCalories = todayMeals.reduce((sum, m) => sum + (Number(m.calories) || 0), 0);
@@ -502,6 +856,7 @@ async function getSummary(userId) {
     monthSpent,
     monthEarned,
     monthNet: monthEarned - monthSpent,
+    categoryBreakdown: categoryMap,
     todayCalories,
     calorieTarget: dietProfile.dailyCalorieTarget || 2000,
     todayProtein,
@@ -520,6 +875,11 @@ module.exports = {
   logIncome,
   logMeal,
   logMileage,
+  payEmi,
+  handleDebtUpdate,
+  payCreditCardBill,
+  getBalances,
+  getEmisAndDebts,
   saveOnboardingProfile,
   getSummary,
 };

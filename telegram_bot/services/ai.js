@@ -4,7 +4,7 @@ require("dotenv").config();
 
 function getGeminiModel() {
   const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) return null;
+  if (!apiKey || !apiKey.startsWith("AIzaSy")) return null;
   try {
     const genAI = new GoogleGenerativeAI(apiKey);
     return genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
@@ -31,39 +31,57 @@ Default Currency: Indian Rupee (INR / ₹). All numbers represent INR unless spe
 
 Analyze the user's message and categorize it into one of the following intents:
 
-1. "EXPENSE": The user spent money on something.
+1. "EXPENSE": The user spent money on something (e.g. "Spent 350 on lunch with UPI", "Bought groceries 1200 on Supermoney card").
    Extract:
    - amount: number (required)
-   - description: string (merchant or item name, e.g. "Chai and snacks", "Starbucks Coffee")
-   - category: string (e.g., "Food", "Groceries", "Transport", "Shopping", "Entertainment", "Bills", "Health", "Other")
-   - account: string (optional, e.g. "Cash", "HDFC Bank", "SBI", "GPay", "Credit Card")
-   - date: "YYYY-MM-DD" (defaults to current date if not mentioned)
+   - description: string (merchant or item name)
+   - category: string ("Food", "Groceries", "Transport", "Shopping", "Entertainment", "Bills", "Health", "Other")
+   - account: string (optional, e.g. "Cash", "HDFC", "SBI", "GPay", "Supermoney Card", "Credit Card")
+   - date: "YYYY-MM-DD"
 
-2. "INCOME": The user received money.
+2. "INCOME": The user received money (e.g. "Received 29600 salary", "Freelance payout 5000").
    Extract:
    - amount: number (required)
-   - source: string (e.g. "Salary", "Freelance", "Gift", "Dividends")
+   - source: string (e.g. "Salary", "Freelance", "Bonus", "Gift")
    - account: string (optional)
    - date: "YYYY-MM-DD"
 
-3. "MEAL": The user ate something or logged food.
+3. "PAY_EMI": The user paid their loan/EMI (e.g. "Paid college emi 3750", "Mark iPhone EMI as paid", "Paid my car EMI").
    Extract:
-   - name: string (e.g. "2 Rotis with Dal and Paneer")
-   - calories: number (estimated total kcal)
+   - emiName: string (e.g. "College EMI", "iPhone EMI")
+   - amount: number (optional)
+   - account: string (optional)
+
+4. "DEBT_UPDATE": The user lent/borrowed money or received/paid back a debt (e.g. "Shamveel paid back 5000", "Lent 2000 to Rahul", "Settled debt with Shamveel", "Borrowed 3000 from Dad").
+   Extract:
+   - action: "settle" (for repayments/paybacks) | "new" (for new lend/borrow)
+   - type: "lend" | "borrow"
+   - personName: string
+   - amount: number
+   - contact: string (optional phone number)
+
+5. "PAY_CARD_BILL": The user paid their credit card bill (e.g. "Paid 10000 credit card bill", "Cleared Supermoney bill 5000 from HDFC").
+   Extract:
+   - amount: number (required)
+   - account: string (optional bank used to pay)
+
+6. "MEAL": The user ate something or logged food (e.g. "Ate 2 chapatis with paneer and curd").
+   Extract:
+   - name: string
+   - calories: number (estimated kcal)
    - protein: number (estimated grams)
    - carbs: number (estimated grams)
    - fat: number (estimated grams)
    - mealType: "Breakfast" | "Lunch" | "Dinner" | "Snack"
 
-4. "MILEAGE": The user fueled up their vehicle or logged odometer.
+7. "MILEAGE": Fuel / odometer logging (e.g. "Fuel 25L for 2600 at 45000 km").
    Extract:
-   - odometer: number (km reading)
-   - liters: number (fuel amount)
-   - totalCost: number (cost of fuel in INR)
-   - pricePerLiter: number (optional)
-   - notes: string (e.g. "Petrol full tank")
+   - odometer: number
+   - liters: number
+   - totalCost: number
+   - notes: string
 
-5. "ONBOARDING": The user is describing multiple accounts, salary, EMIs, credit cards, fixed deposits, or goals to set up their entire financial profile.
+8. "ONBOARDING": Setup entire profile with accounts, salary, EMIs, credit cards, FDs, debts.
    Extract:
    - accounts: array of { name: string, balance: number }
    - incomes: array of { source: string, amount: number }
@@ -74,15 +92,15 @@ Analyze the user's message and categorize it into one of the following intents:
    - borrowLends: array of { to: string, contact: string, amount: number, date: string, type: "lent" | "borrowed" }
    - goals: array of { name: string, targetAmount: number }
 
-6. "QUERY": The user is asking a question about their finances, spending, or app status.
+9. "QUERY": User asking for balances, stats, analytics, or questions (e.g. "Show balance", "How much did I spend?", "Show my EMIs", "Analytics").
    Extract:
-   - query: string
+   - queryType: "balance" | "emis" | "debts" | "card" | "analytics" | "general"
 
-7. "UNKNOWN": Cannot determine intent.
+10. "UNKNOWN": Cannot determine intent.
 
 Respond STRICTLY with valid JSON matching this schema:
 {
-  "intent": "EXPENSE" | "INCOME" | "MEAL" | "MILEAGE" | "ONBOARDING" | "QUERY" | "UNKNOWN",
+  "intent": "EXPENSE" | "INCOME" | "PAY_EMI" | "DEBT_UPDATE" | "PAY_CARD_BILL" | "MEAL" | "MILEAGE" | "ONBOARDING" | "QUERY" | "UNKNOWN",
   "confidence": number,
   "data": { ... },
   "explanation": "Short friendly summary of what was understood"
@@ -90,7 +108,7 @@ Respond STRICTLY with valid JSON matching this schema:
 `;
 
 /**
- * Parse Natural Language Text using Gemini (or fallback to Groq)
+ * Parse Natural Language Text using Gemini (or Groq fallback)
  */
 async function parseTextMessage(text) {
   const currentDate = new Date().toISOString().split("T")[0];
@@ -99,7 +117,7 @@ async function parseTextMessage(text) {
   const geminiModel = getGeminiModel();
   const groq = getGroqClient();
 
-  // 1. Try Gemini
+  // 1. Try Gemini if valid key exists
   if (geminiModel) {
     try {
       const result = await geminiModel.generateContent({
@@ -159,7 +177,7 @@ async function parseTextMessage(text) {
     }
   }
 
-  throw new Error("No available AI service configured. Please check GEMINI_API_KEY or GROQ_API_KEY.");
+  throw new Error("No available AI service configured. Please check GROQ_API_KEY.");
 }
 
 /**
@@ -168,14 +186,14 @@ async function parseTextMessage(text) {
 async function analyzeImage(imageBuffer, mimeType = "image/jpeg", caption = "") {
   const geminiModel = getGeminiModel();
   if (!geminiModel) {
-    throw new Error("GEMINI_API_KEY is required for image analysis (receipt OCR & meal detection).");
+    throw new Error("A Google Gemini API Key (starts with AIzaSy) is required for receipt photo OCR & meal photo analysis.");
   }
 
   const prompt = `
 Analyze this image. Default currency is Indian Rupee (INR / ₹).
 It is either:
 1. A RECEIPT / INVOICE / BILL:
-   Extract the merchant/store name, total amount paid in INR, currency, transaction date, line items, taxes, and suggested category.
+   Extract merchant name, total amount in INR, date, line items, and category.
    Set "type": "RECEIPT".
    "data": {
      "merchant": string,
@@ -188,7 +206,7 @@ It is either:
    }
 
 2. A FOOD / MEAL PHOTO:
-   Identify the dish/food items visible. Estimate accurate nutritional facts: calories (kcal), protein (g), carbs (g), fat (g).
+   Estimate nutritional facts: calories (kcal), protein (g), carbs (g), fat (g).
    Set "type": "MEAL".
    "data": {
      "name": string (dish title),
