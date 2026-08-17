@@ -24,14 +24,16 @@ if (process.env.GROQ_API_KEY) {
 
 const SYSTEM_PARSER_PROMPT = `
 You are the AI engine for "OrbitLife" / "MyBudgetPro", a personal finance & health dashboard.
+Default Currency: Indian Rupee (INR / ₹). All numbers represent INR unless specified otherwise.
+
 Analyze the user's message and categorize it into one of the following intents:
 
 1. "EXPENSE": The user spent money on something.
    Extract:
    - amount: number (required)
-   - description: string (merchant or item name, e.g. "Starbucks Coffee")
+   - description: string (merchant or item name, e.g. "Chai and snacks", "Starbucks Coffee")
    - category: string (e.g., "Food", "Groceries", "Transport", "Shopping", "Entertainment", "Bills", "Health", "Other")
-   - account: string (optional, e.g. "Cash", "Credit Card", "Emirates NBD", "Bank")
+   - account: string (optional, e.g. "Cash", "HDFC Bank", "SBI", "GPay", "Credit Card")
    - date: "YYYY-MM-DD" (defaults to current date if not mentioned)
 
 2. "INCOME": The user received money.
@@ -43,7 +45,7 @@ Analyze the user's message and categorize it into one of the following intents:
 
 3. "MEAL": The user ate something or logged food.
    Extract:
-   - name: string (e.g. "Grilled Chicken Salad")
+   - name: string (e.g. "2 Rotis with Dal and Paneer")
    - calories: number (estimated total kcal)
    - protein: number (estimated grams)
    - carbs: number (estimated grams)
@@ -54,19 +56,28 @@ Analyze the user's message and categorize it into one of the following intents:
    Extract:
    - odometer: number (km reading)
    - liters: number (fuel amount)
-   - totalCost: number (cost of fuel)
+   - totalCost: number (cost of fuel in INR)
    - pricePerLiter: number (optional)
-   - notes: string (e.g. "Full tank")
+   - notes: string (e.g. "Petrol full tank")
 
-5. "QUERY": The user is asking a question about their finances, spending, or app status.
+5. "ONBOARDING": The user is describing multiple accounts, salary, EMIs, credit cards, or goals to set up their entire financial profile.
+   Extract:
+   - accounts: array of { name: string, balance: number }
+   - incomes: array of { source: string, amount: number }
+   - recurringExpenses: array of { name: string, amount: number, category: string }
+   - emis: array of { name: string, monthlyAmount: number, months: number }
+   - goals: array of { name: string, targetAmount: number }
+   - creditCards: array of { name: string, limit: number }
+
+6. "QUERY": The user is asking a question about their finances, spending, or app status.
    Extract:
    - query: string
 
-6. "UNKNOWN": Cannot determine intent.
+7. "UNKNOWN": Cannot determine intent.
 
 Respond STRICTLY with valid JSON matching this schema:
 {
-  "intent": "EXPENSE" | "INCOME" | "MEAL" | "MILEAGE" | "QUERY" | "UNKNOWN",
+  "intent": "EXPENSE" | "INCOME" | "MEAL" | "MILEAGE" | "ONBOARDING" | "QUERY" | "UNKNOWN",
   "confidence": number,
   "data": { ... },
   "explanation": "Short friendly summary of what was understood"
@@ -78,7 +89,7 @@ Respond STRICTLY with valid JSON matching this schema:
  */
 async function parseTextMessage(text) {
   const currentDate = new Date().toISOString().split("T")[0];
-  const userContent = `Today's Date: ${currentDate}\nUser Input: "${text}"`;
+  const userContent = `Today's Date: ${currentDate}\nDefault Currency: Indian Rupee (INR / ₹)\nUser Input: "${text}"`;
 
   // 1. Try Gemini
   if (geminiModel) {
@@ -136,14 +147,15 @@ async function analyzeImage(imageBuffer, mimeType = "image/jpeg", caption = "") 
   }
 
   const prompt = `
-Analyze this image. It is either:
+Analyze this image. Default currency is Indian Rupee (INR / ₹).
+It is either:
 1. A RECEIPT / INVOICE / BILL:
-   Extract the merchant/store name, total amount paid, currency, transaction date, line items, taxes, and suggested category.
+   Extract the merchant/store name, total amount paid in INR, currency, transaction date, line items, taxes, and suggested category.
    Set "type": "RECEIPT".
    "data": {
      "merchant": string,
      "amount": number,
-     "currency": string,
+     "currency": "INR",
      "date": "YYYY-MM-DD",
      "category": "Groceries" | "Food" | "Shopping" | "Bills" | "Health" | "Other",
      "items": [{"name": string, "price": number}],

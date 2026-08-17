@@ -12,6 +12,7 @@ const {
   logIncome,
   logMeal,
   logMileage,
+  saveOnboardingProfile,
   getSummary,
 } = require("../services/firebase");
 
@@ -28,15 +29,16 @@ bot.start(async (ctx) => {
   const userId = await getUserIdByChatId(chatId);
 
   let message = `👋 *Welcome to OrbitLife Automation Bot!*\n\n` +
-    `I am your personal AI financial and health manager. You can talk to me naturally, send receipt photos, or log meals on the go.\n\n`;
+    `I am your personal AI financial and health manager (Default: ₹ INR). You can talk to me naturally, send receipt photos, or log meals on the go.\n\n`;
 
   if (userId) {
     message += `✅ *Status:* Connected to User \`${userId.substring(0, 8)}...\`\n\n` +
       `Try sending:\n` +
-      `• _"Spent 45 AED on lunch with card"_\n` +
-      `• _"Got 5000 salary"_\n` +
-      `• _"Ate 2 eggs, avocado toast & black coffee"_\n` +
-      `• _"Fuel 40L cost 110 at 58,000 km"_\n` +
+      `• _"Spent ₹450 on dinner with UPI"_\n` +
+      `• _"Got ₹75,000 salary from employer"_\n` +
+      `• _"Ate 2 dosas with sambar and filter coffee"_\n` +
+      `• _"Fuel 25L cost ₹2,600 at 45,000 km"_\n` +
+      `• _Send /onboard to set up your entire financial profile at once!_\n` +
       `• Or *snap a photo* of a receipt or your meal! 📸`;
   } else {
     message += `⚠️ *Account Not Linked Yet!*\n\n` +
@@ -58,10 +60,20 @@ bot.command("link", async (ctx) => {
 
   try {
     await linkUserChatId(userId, chatId);
-    await ctx.reply(`🎉 *Success! Your Telegram is now linked to OrbitLife.*\n\nUser ID: \`${userId}\``, { parse_mode: "Markdown" });
+    await ctx.reply(`🎉 *Success! Your Telegram is now linked to OrbitLife.*\n\nUser ID: \`${userId}\`\n\nYou can now log expenses, meals, or send your full profile details to set up everything! 🚀`, { parse_mode: "Markdown" });
   } catch (err) {
     await ctx.reply(`❌ *Failed to link account:* ${err.message}`, { parse_mode: "Markdown" });
   }
+});
+
+bot.command("onboard", async (ctx) => {
+  const msg = `🚀 *OrbitLife Fast Onboarding Setup (in ₹ INR)*\n\n` +
+    `You can set up your entire financial profile in one message! Just send a text or voice note with your details:\n\n` +
+    `*Example:*\n` +
+    `_"My monthly salary is ₹85,000 on the 1st. Bank accounts: HDFC Bank with ₹45,000 balance, SBI with ₹15,000, and Cash ₹5,000. Credit Card: ICICI with ₹1,50,000 limit. Recurring bills: Rent ₹18,000, Electricity ₹2,500, Wi-Fi ₹999, Gym ₹2,000. Active EMI: Car loan ₹12,500/month (24 months left). Goals: Emergency Fund ₹3,00,000."_\n\n` +
+    `👉 *Send your financial details now and AI will set up your entire profile!*`;
+
+  await ctx.reply(msg, { parse_mode: "Markdown" });
 });
 
 bot.command("today", async (ctx) => {
@@ -75,9 +87,9 @@ bot.command("today", async (ctx) => {
 
     const caloriePercent = Math.round((summary.todayCalories / (summary.calorieTarget || 2000)) * 100);
     const msg = `📅 *Today's OrbitLife Summary*\n\n` +
-      `💸 *Expenses Today:* AED ${summary.todaySpent.toFixed(2)} (${summary.todayExpensesCount} entries)\n` +
-      `💰 *Month Spend:* AED ${summary.monthSpent.toFixed(2)} | *Earned:* AED ${summary.monthEarned.toFixed(2)}\n` +
-      `📈 *Month Net Flow:* AED ${summary.monthNet.toFixed(2)}\n\n` +
+      `💸 *Expenses Today:* ₹${summary.todaySpent.toLocaleString("en-IN", { minimumFractionDigits: 2 })} (${summary.todayExpensesCount} entries)\n` +
+      `💰 *Month Spend:* ₹${summary.monthSpent.toLocaleString("en-IN", { minimumFractionDigits: 2 })} | *Earned:* ₹${summary.monthEarned.toLocaleString("en-IN", { minimumFractionDigits: 2 })}\n` +
+      `📈 *Month Net Flow:* ₹${summary.monthNet.toLocaleString("en-IN", { minimumFractionDigits: 2 })}\n\n` +
       `🥗 *Nutrition Today:*\n` +
       `• Calories: *${summary.todayCalories}* / ${summary.calorieTarget} kcal (${caloriePercent}%)\n` +
       `• Protein: *${summary.todayProtein.toFixed(1)}g* | Carbs: *${summary.todayCarbs.toFixed(1)}g* | Fat: *${summary.todayFat.toFixed(1)}g*`;
@@ -118,8 +130,12 @@ bot.on("photo", async (ctx) => {
 
       let reply = `🧾 *Receipt Processed & Logged!*\n\n` +
         `🏪 *Store:* ${merchant || "Unknown"}\n` +
-        `💰 *Total Amount:* AED ${expense.amount.toFixed(2)}\n` +
+        `💰 *Total Amount:* ₹${expense.amount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}\n` +
         `📁 *Category:* ${expense.categoryId}\n`;
+
+      if (items && items.length > 0) {
+        reply += `\n*Items Found:*\n` + items.slice(0, 5).map((i) => `• ${i.name} (₹${i.price || ""})`).join("\n");
+      }
 
       await ctx.telegram.editMessageText(chatId, statusMsg.message_id, null, reply, { parse_mode: "Markdown" });
     } else if (analysis.type === "MEAL") {
@@ -155,8 +171,24 @@ bot.on("text", async (ctx) => {
   const userId = await getUserIdByChatId(chatId);
   if (!userId) return ctx.reply("⚠️ Please connect with `/link YOUR_USER_ID` first.", { parse_mode: "Markdown" });
 
+  await ctx.sendChatAction("typing");
+
   try {
     const parsed = await parseTextMessage(text);
+
+    if (parsed.intent === "ONBOARDING") {
+      const stats = await saveOnboardingProfile(userId, parsed.data);
+      let reply = `🎉 *Financial Profile Setup Completed!*\n\n` +
+        `🏦 *Bank/Cash Accounts Created:* ${stats.accountsCount}\n` +
+        `💵 *Incomes Logged:* ${stats.incomesCount}\n` +
+        `🔄 *Recurring Bills Configured:* ${stats.expensesCount}\n` +
+        `📑 *Active EMIs Tracked:* ${stats.emisCount}\n` +
+        `🎯 *Financial Goals Set:* ${stats.goalsCount}\n` +
+        `💳 *Credit Card Linked:* ${stats.hasCreditCard ? "Yes ✅" : "None"}\n\n` +
+        `✨ *All data has been synced to your OrbitLife App!* Open your app to see your live dashboard.`;
+
+      return ctx.reply(reply, { parse_mode: "Markdown" });
+    }
 
     if (parsed.intent === "EXPENSE") {
       const exp = await logExpense(userId, {
@@ -167,7 +199,7 @@ bot.on("text", async (ctx) => {
         date: parsed.data.date,
         source: "telegram_text",
       });
-      return ctx.reply(`💸 *Expense Logged!*\n\n📝 *Item:* ${exp.description}\n💰 *Amount:* AED ${exp.amount.toFixed(2)}\n📁 *Category:* ${exp.categoryId}`, { parse_mode: "Markdown" });
+      return ctx.reply(`💸 *Expense Logged!*\n\n📝 *Item:* ${exp.description}\n💰 *Amount:* ₹${exp.amount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}\n📁 *Category:* ${exp.categoryId}`, { parse_mode: "Markdown" });
     }
 
     if (parsed.intent === "INCOME") {
@@ -177,7 +209,7 @@ bot.on("text", async (ctx) => {
         account: parsed.data.account || "Default",
         date: parsed.data.date,
       });
-      return ctx.reply(`🟢 *Income Logged!*\n\n💵 *Source:* ${inc.source}\n💰 *Amount:* AED ${inc.amount.toFixed(2)}`, { parse_mode: "Markdown" });
+      return ctx.reply(`🟢 *Income Logged!*\n\n💵 *Source:* ${inc.source}\n💰 *Amount:* ₹${inc.amount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}`, { parse_mode: "Markdown" });
     }
 
     if (parsed.intent === "MEAL") {
@@ -187,10 +219,10 @@ bot.on("text", async (ctx) => {
 
     if (parsed.intent === "MILEAGE") {
       const entry = await logMileage(userId, parsed.data);
-      return ctx.reply(`⛽ *Mileage Logged!*\n\n🚗 *Odometer:* ${entry.odometer} km\n🛢️ *Fuel:* ${entry.liters} L\n💰 *Cost:* AED ${entry.totalCost.toFixed(2)}`, { parse_mode: "Markdown" });
+      return ctx.reply(`⛽ *Mileage Logged!*\n\n🚗 *Odometer:* ${entry.odometer} km\n🛢️ *Fuel:* ${entry.liters} L\n💰 *Cost:* ₹${entry.totalCost.toLocaleString("en-IN", { minimumFractionDigits: 2 })}`, { parse_mode: "Markdown" });
     }
 
-    return ctx.reply("🤖 I received your message. Send `/help` for examples!", { parse_mode: "Markdown" });
+    return ctx.reply("🤖 I received your message. Send `/onboard` to set up your profile or `/help` for examples!", { parse_mode: "Markdown" });
   } catch (err) {
     return ctx.reply(`❌ *Error:* ${err.message}`, { parse_mode: "Markdown" });
   }

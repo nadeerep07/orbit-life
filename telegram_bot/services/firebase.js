@@ -87,7 +87,6 @@ async function linkUserChatId(userId, chatId) {
   const doc = await userRef.get();
 
   if (!doc.exists) {
-    // Create basic document if it doesn't exist yet
     await userRef.set(
       {
         telegramChatId: String(chatId),
@@ -292,6 +291,108 @@ async function logMileage(userId, { odometer, liters, totalCost, pricePerLiter, 
 }
 
 /**
+ * Save Full Onboarding Data
+ */
+async function saveOnboardingProfile(userId, { accounts = [], incomes = [], recurringExpenses = [], emis = [], goals = [], creditCards = [], savingsTarget = null }) {
+  const firestore = getDb();
+  const userRef = firestore.collection("users").doc(userId);
+  const now = new Date().toISOString();
+
+  // Formatted accounts
+  const formattedAccounts = accounts.map((a) => ({
+    id: a.id || uuidv4(),
+    name: a.name || "Main Account",
+    openingBalance: Number(a.balance || 0),
+    initialBalance: Number(a.balance || 0),
+  }));
+
+  // Formatted Incomes
+  const primaryAccountId = formattedAccounts.length > 0 ? formattedAccounts[0].id : "default";
+  const formattedIncomes = incomes.map((i) => ({
+    id: uuidv4(),
+    source: i.source || "Salary",
+    amount: Number(i.amount || 0),
+    date: now,
+    accountId: primaryAccountId,
+  }));
+
+  // Formatted Expenses
+  const formattedExpenses = recurringExpenses.map((e) => ({
+    id: uuidv4(),
+    categoryId: e.category || "Bills",
+    amount: Number(e.amount || 0),
+    description: e.name || e.category || "Recurring Expense",
+    date: now,
+    accountId: primaryAccountId,
+    isFromSavings: false,
+    source: "onboarding",
+  }));
+
+  // Formatted EMIs
+  const formattedEmis = emis.map((emi) => ({
+    id: uuidv4(),
+    loanName: emi.name || "Loan",
+    monthlyEmi: Number(emi.monthlyAmount || 0),
+    totalAmount: Number(emi.totalAmount || (emi.monthlyAmount * (emi.months || 12))),
+    remainingMonths: Number(emi.months || 12),
+    interestRate: Number(emi.interestRate || 0),
+    startDate: now,
+  }));
+
+  // Formatted Goals
+  const formattedGoals = goals.map((g) => ({
+    id: uuidv4(),
+    name: g.name || "Financial Goal",
+    targetAmount: Number(g.targetAmount || 0),
+    currentSavings: Number(g.currentSavings || 0),
+    targetDate: g.targetDate || now,
+    isCompleted: false,
+  }));
+
+  // Formatted Credit Card
+  const primaryCc = creditCards && creditCards.length > 0 ? {
+    id: uuidv4(),
+    cardName: creditCards[0].name || "Credit Card",
+    totalLimit: Number(creditCards[0].limit || 50000),
+    statementDate: Number(creditCards[0].statementDate || 1),
+    dueDate: Number(creditCards[0].dueDate || 20),
+    usedLimit: Number(creditCards[0].usedLimit || 0),
+  } : null;
+
+  const updatePayload = {
+    accounts: formattedAccounts,
+    incomes: formattedIncomes,
+    expenses: formattedExpenses,
+    emis: formattedEmis,
+    goals: formattedGoals,
+    lastBackup: admin.firestore.FieldValue.serverTimestamp(),
+    isOnboarded: true,
+  };
+
+  if (primaryCc) {
+    updatePayload.creditCardAccount = primaryCc;
+  }
+
+  if (savingsTarget) {
+    updatePayload.savings = {
+      targetPercentage: Number(savingsTarget.percentage || 20),
+      monthlyTarget: Number(savingsTarget.monthlyTarget || 0),
+    };
+  }
+
+  await userRef.set(updatePayload, { merge: true });
+
+  return {
+    accountsCount: formattedAccounts.length,
+    incomesCount: formattedIncomes.length,
+    expensesCount: formattedExpenses.length,
+    emisCount: formattedEmis.length,
+    goalsCount: formattedGoals.length,
+    hasCreditCard: !!primaryCc,
+  };
+}
+
+/**
  * Calculate Summary for Today & Month
  */
 async function getSummary(userId) {
@@ -348,5 +449,6 @@ module.exports = {
   logIncome,
   logMeal,
   logMileage,
+  saveOnboardingProfile,
   getSummary,
 };
