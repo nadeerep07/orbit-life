@@ -293,7 +293,7 @@ async function logMileage(userId, { odometer, liters, totalCost, pricePerLiter, 
 /**
  * Save Full Onboarding Data
  */
-async function saveOnboardingProfile(userId, { accounts = [], incomes = [], recurringExpenses = [], emis = [], goals = [], creditCards = [], savingsTarget = null }) {
+async function saveOnboardingProfile(userId, { accounts = [], incomes = [], recurringExpenses = [], emis = [], goals = [], creditCards = [], borrowLends = [], savingsTarget = null }) {
   const firestore = getDb();
   const userRef = firestore.collection("users").doc(userId);
   const now = new Date().toISOString();
@@ -332,9 +332,9 @@ async function saveOnboardingProfile(userId, { accounts = [], incomes = [], recu
   const formattedEmis = emis.map((emi) => ({
     id: uuidv4(),
     loanName: emi.name || "Loan",
-    monthlyEmi: Number(emi.monthlyAmount || 0),
-    totalAmount: Number(emi.totalAmount || (emi.monthlyAmount * (emi.months || 12))),
-    remainingMonths: Number(emi.months || 12),
+    monthlyEmi: Number(emi.amount || emi.monthlyAmount || 0),
+    totalAmount: Number(emi.totalAmount || ((emi.amount || emi.monthlyAmount || 0) * (emi.remainingMonths || emi.months || 12))),
+    remainingMonths: Number(emi.remainingMonths || emi.months || 12),
     interestRate: Number(emi.interestRate || 0),
     startDate: now,
   }));
@@ -349,14 +349,26 @@ async function saveOnboardingProfile(userId, { accounts = [], incomes = [], recu
     isCompleted: false,
   }));
 
+  // Formatted Borrow / Lends
+  const formattedBorrowLends = (borrowLends || []).map((b) => ({
+    id: uuidv4(),
+    personName: b.to || b.personName || "Person",
+    phoneNumber: b.contact || b.phoneNumber || "",
+    amount: Number(b.amount || 0),
+    type: b.type === "borrowed" ? "borrow" : "lend",
+    date: b.date || now,
+    notes: "Recorded via Telegram Onboarding",
+    isSettled: false,
+  }));
+
   // Formatted Credit Card
   const primaryCc = creditCards && creditCards.length > 0 ? {
     id: uuidv4(),
-    cardName: creditCards[0].name || "Credit Card",
-    totalLimit: Number(creditCards[0].limit || 50000),
+    cardName: creditCards[0].name || "Supermoney Credit Card",
+    totalLimit: Number(creditCards[0].totalLimit || creditCards[0].limit || 26713.8),
     statementDate: Number(creditCards[0].statementDate || 1),
-    dueDate: Number(creditCards[0].dueDate || 20),
-    usedLimit: Number(creditCards[0].usedLimit || 0),
+    dueDate: Number(creditCards[0].dueDate || 15),
+    usedLimit: Number(creditCards[0].used || creditCards[0].usedLimit || 0),
   } : null;
 
   const updatePayload = {
@@ -365,6 +377,7 @@ async function saveOnboardingProfile(userId, { accounts = [], incomes = [], recu
     expenses: formattedExpenses,
     emis: formattedEmis,
     goals: formattedGoals,
+    borrowLends: formattedBorrowLends,
     lastBackup: admin.firestore.FieldValue.serverTimestamp(),
     isOnboarded: true,
   };
@@ -388,6 +401,7 @@ async function saveOnboardingProfile(userId, { accounts = [], incomes = [], recu
     expensesCount: formattedExpenses.length,
     emisCount: formattedEmis.length,
     goalsCount: formattedGoals.length,
+    borrowLendsCount: formattedBorrowLends.length,
     hasCreditCard: !!primaryCc,
   };
 }

@@ -129,7 +129,7 @@ async function parseTextMessage(text) {
           { role: "system", content: SYSTEM_PARSER_PROMPT },
           { role: "user", content: userContent },
         ],
-        model: "llama-3.3-70b-versatile",
+        model: "openai/gpt-oss-120b",
         response_format: { type: "json_object" },
         temperature: 0.1,
       });
@@ -137,7 +137,23 @@ async function parseTextMessage(text) {
       const parsed = JSON.parse(completion.choices[0]?.message?.content || "{}");
       return parsed;
     } catch (err) {
-      console.error("❌ Groq text parsing error:", err.message);
+      console.warn("⚠️ Primary Groq model error, trying secondary:", err.message);
+      try {
+        const completion = await groq.chat.completions.create({
+          messages: [
+            { role: "system", content: SYSTEM_PARSER_PROMPT },
+            { role: "user", content: userContent },
+          ],
+          model: "openai/gpt-oss-20b",
+          response_format: { type: "json_object" },
+          temperature: 0.1,
+        });
+
+        const parsed = JSON.parse(completion.choices[0]?.message?.content || "{}");
+        return parsed;
+      } catch (e2) {
+        console.error("❌ Groq text parsing error:", e2.message);
+      }
     }
   }
 
