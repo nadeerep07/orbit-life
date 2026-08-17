@@ -331,12 +331,21 @@ async function saveOnboardingProfile(userId, { accounts = [], incomes = [], recu
   // Formatted EMIs
   const formattedEmis = emis.map((emi) => ({
     id: uuidv4(),
-    loanName: emi.name || "Loan",
-    monthlyEmi: Number(emi.amount || emi.monthlyAmount || 0),
+    title: emi.name || emi.title || "Loan",
+    loanName: emi.name || emi.title || "Loan",
+    provider: emi.provider || "Bank",
+    monthlyEmi: Number(emi.amount || emi.monthlyAmount || emi.monthlyEmi || 0),
     totalAmount: Number(emi.totalAmount || ((emi.amount || emi.monthlyAmount || 0) * (emi.remainingMonths || emi.months || 12))),
+    totalMonths: Number(emi.remainingMonths || emi.months || 12),
+    paidMonths: 0,
     remainingMonths: Number(emi.remainingMonths || emi.months || 12),
     interestRate: Number(emi.interestRate || 0),
     startDate: now,
+    notes: "",
+    isPayLater: false,
+    isPaid: false,
+    isReminderEnabled: true,
+    accountId: primaryAccountId,
   }));
 
   // Formatted Goals
@@ -357,8 +366,10 @@ async function saveOnboardingProfile(userId, { accounts = [], incomes = [], recu
     amount: Number(b.amount || 0),
     type: b.type === "borrowed" ? "borrow" : "lend",
     date: b.date || now,
-    notes: "Recorded via Telegram Onboarding",
-    isSettled: false,
+    note: b.notes || "Recorded via Telegram Onboarding",
+    status: "pending",
+    accountId: primaryAccountId,
+    transactions: [],
   }));
 
   // Formatted Credit Card
