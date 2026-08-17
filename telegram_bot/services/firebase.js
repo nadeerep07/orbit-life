@@ -124,6 +124,14 @@ async function linkUserChatId(userId, chatId) {
     { merge: true }
   );
 
+/**
+ * Unlink Telegram Chat ID
+ */
+async function unlinkUserChatId(chatId) {
+  const firestore = getDb();
+  const strChatId = String(chatId);
+
+  await firestore.collection("telegram_links").doc(strChatId).delete();
   return true;
 }
 
@@ -896,6 +904,7 @@ module.exports = {
   initializeFirebase,
   getUserIdByChatId,
   linkUserChatId,
+  unlinkUserChatId,
   getUserData,
   logExpense,
   logIncome,

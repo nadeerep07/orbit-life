@@ -74,6 +74,26 @@ bot.command("link", async (ctx) => {
   }
 });
 
+bot.command("unlink", async (ctx) => {
+  const chatId = ctx.chat.id;
+  try {
+    await unlinkUserChatId(chatId);
+    await ctx.reply("🔌 *Account Unlinked!*\n\nYou can link a new account anytime with:\n`/link <NEW_USER_ID>`", { parse_mode: "Markdown" });
+  } catch (err) {
+    await ctx.reply(`❌ *Error:* ${err.message}`);
+  }
+});
+
+bot.command("whoami", async (ctx) => {
+  const chatId = ctx.chat.id;
+  const userId = await getUserIdByChatId(chatId);
+  if (userId) {
+    await ctx.reply(`👤 *Current Connected Account:*\n\nUser ID: \`${userId}\`\n\nTo switch accounts, send:\n\`/link <NEW_USER_ID>\`\nOr to disconnect, send:\n\`/unlink\``, { parse_mode: "Markdown" });
+  } else {
+    await ctx.reply("⚠️ No account is currently linked.\n\nSend `/link <USER_ID>` to connect.", { parse_mode: "Markdown" });
+  }
+});
+
 // ─── COMMAND: /balance ───────────────────────────────────────────────────────
 async function handleBalanceQuery(ctx) {
   const chatId = ctx.chat.id;
