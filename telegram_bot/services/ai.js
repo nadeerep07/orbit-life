@@ -2,23 +2,26 @@ const { GoogleGenerativeAI } = require("@google/generative-ai");
 const Groq = require("groq-sdk");
 require("dotenv").config();
 
-let geminiModel = null;
-let groq = null;
-
-if (process.env.GEMINI_API_KEY) {
+function getGeminiModel() {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) return null;
   try {
-    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-    geminiModel = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    const genAI = new GoogleGenerativeAI(apiKey);
+    return genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
   } catch (e) {
-    console.warn("⚠️ Failed to initialize Google Generative AI SDK:", e.message);
+    console.warn("⚠️ Failed to initialize Gemini SDK:", e.message);
+    return null;
   }
 }
 
-if (process.env.GROQ_API_KEY) {
+function getGroqClient() {
+  const apiKey = process.env.GROQ_API_KEY;
+  if (!apiKey) return null;
   try {
-    groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+    return new Groq({ apiKey });
   } catch (e) {
     console.warn("⚠️ Failed to initialize Groq SDK:", e.message);
+    return null;
   }
 }
 
@@ -91,6 +94,9 @@ async function parseTextMessage(text) {
   const currentDate = new Date().toISOString().split("T")[0];
   const userContent = `Today's Date: ${currentDate}\nDefault Currency: Indian Rupee (INR / ₹)\nUser Input: "${text}"`;
 
+  const geminiModel = getGeminiModel();
+  const groq = getGroqClient();
+
   // 1. Try Gemini
   if (geminiModel) {
     try {
@@ -142,6 +148,7 @@ async function parseTextMessage(text) {
  * Analyze an Image (Receipt OCR or Food Macros) using Gemini Vision
  */
 async function analyzeImage(imageBuffer, mimeType = "image/jpeg", caption = "") {
+  const geminiModel = getGeminiModel();
   if (!geminiModel) {
     throw new Error("GEMINI_API_KEY is required for image analysis (receipt OCR & meal detection).");
   }
