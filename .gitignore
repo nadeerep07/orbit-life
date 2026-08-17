@@ -44,3 +44,13 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Telegram Bot & Secrets
+**/node_modules/
+**/.env
+**/.env.*
+!**/.env.example
+**/serviceAccountKey.json
+serviceAccountKey.json
+.vercel
+

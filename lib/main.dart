@@ -46,6 +46,9 @@ import 'features/credit_card/presentation/blocs/credit_card_bloc.dart';
 import 'features/credit_card/presentation/blocs/fd_lots_bloc.dart';
 import 'features/credit_card/presentation/blocs/statement_bloc.dart';
 import 'features/credit_card/presentation/blocs/cashback_bloc.dart';
+import 'features/onboarding/data/datasources/onboarding_local_data_source.dart';
+import 'features/onboarding/data/repositories/onboarding_repository_impl.dart';
+import 'features/onboarding/presentation/bloc/onboarding_bloc.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import 'data/models/goal_model.dart';
@@ -156,10 +159,28 @@ void main() async {
   final emiTrackerRepository = EmiTrackerRepositoryImpl(localDataSource);
   final borrowLendRepository = BorrowLendRepositoryImpl(localDataSource);
   final investmentRepository = InvestmentRepositoryImpl(localDataSource);
-  final transactionRepository = TransactionRepositoryImpl(localDataSource);
+  final transactionRepository = TransactionRepositoryImpl(
+    localDataSource,
+    creditCardLocalDataSource: creditCardDataSource,
+  );
   final creditCardRepository = CreditCardRepositoryImpl(
     localDataSource: creditCardDataSource,
     transactionRepository: transactionRepository,
+  );
+
+  final onboardingLocalDataSource = OnboardingLocalDataSourceImpl();
+  await onboardingLocalDataSource.init();
+  final onboardingRepository = OnboardingRepositoryImpl(
+    localDataSource: onboardingLocalDataSource,
+    accountRepository: accountRepository,
+    creditCardRepository: creditCardRepository,
+    emiTrackerRepository: emiTrackerRepository,
+    incomeRepository: incomeRepository,
+    expenseRepository: expenseRepository,
+    investmentRepository: investmentRepository,
+    goalRepository: goalRepository,
+    categoryRepository: categoryRepository,
+    settingsRepository: settingsRepository,
   );
 
   // 🛠 Run one-time data fixes and balance resync
@@ -255,6 +276,9 @@ void main() async {
         ),
         BlocProvider(
           create: (_) => CashbackBloc(repository: creditCardRepository)..add(LoadCashbackEvent()),
+        ),
+        BlocProvider(
+          create: (_) => OnboardingBloc(repository: onboardingRepository),
         ),
       ],
       child: const AppLockWrapper(child: MyBudgetApp()),

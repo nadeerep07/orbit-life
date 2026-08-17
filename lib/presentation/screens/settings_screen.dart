@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../../core/utils/responsive.dart';
 import '../../core/utils/export_service.dart';
@@ -21,8 +22,10 @@ import '../viewmodels/mileage_view_model.dart';
 import '../viewmodels/service_view_model.dart';
 import '../viewmodels/diet_view_model.dart';
 import '../widgets/developer_diagnostics_sheet.dart';
+import '../widgets/modern_budget_target_dialog.dart';
 import '../../core/services/local_auth_service.dart';
 import 'package:hive_flutter/hive_flutter.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../data/datasources/remote_data_source.dart';
 import '../../data/models/expense_model.dart';
@@ -74,7 +77,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
         elevation: 0,
         backgroundColor: Colors.transparent,
       ),
-      body: Center(
+      body: Align(
+        alignment: Alignment.topCenter,
         child: ConstrainedBox(
           constraints: BoxConstraints(maxWidth: r.contentMaxWidth),
           child: SingleChildScrollView(
@@ -1011,6 +1015,102 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
               ],
             ),
+            const SizedBox(height: 14),
+
+            // Telegram Bot Automation Integration Tile
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    const Color(0xFF229ED9).withValues(alpha: 0.12),
+                    const Color(0xFF229ED9).withValues(alpha: 0.04),
+                  ],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: const Color(0xFF229ED9).withValues(alpha: 0.25)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(7),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF229ED9).withValues(alpha: 0.2),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: const Icon(Icons.send_rounded, color: Color(0xFF229ED9), size: 16),
+                      ),
+                      const SizedBox(width: 10),
+                      const Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Telegram AI Automation Bot',
+                              style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+                            ),
+                            SizedBox(height: 2),
+                            Text(
+                              'Log expenses, meals & receipts instantly from Telegram',
+                              style: TextStyle(fontSize: 10, color: Colors.grey),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withValues(alpha: 0.04),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: Colors.grey.withValues(alpha: 0.2)),
+                          ),
+                          child: Text(
+                            '/link ${authVM.currentUser?.id ?? "USER_ID"}',
+                            style: const TextStyle(fontSize: 11, fontFamily: 'monospace', fontWeight: FontWeight.w600),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      ElevatedButton.icon(
+                        onPressed: () {
+                          final uid = authVM.currentUser?.id;
+                          if (uid != null) {
+                            Clipboard.setData(ClipboardData(text: '/link $uid'));
+                            AppSnackBar.show(
+                              context,
+                              message: 'Copied "/link $uid" to clipboard! Paste it into your Telegram bot.',
+                              isError: false,
+                            );
+                          }
+                        },
+                        icon: const Icon(Icons.copy_rounded, size: 12),
+                        label: const Text('Copy Command', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF229ED9),
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          elevation: 0,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
           ],
           
           const Padding(
@@ -1020,7 +1120,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
           // Hard Reset Option
           InkWell(
-            onTap: () => _hardResetCreditCards(context),
+            onTap: () => _handleFullHardReset(context),
             borderRadius: BorderRadius.circular(20),
             child: Container(
               padding: const EdgeInsets.all(16),
@@ -1045,7 +1145,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         const Text(
-                          'Hard Reset Credit Cards',
+                          'Hard Reset',
                           style: TextStyle(
                             fontSize: 13,
                             fontWeight: FontWeight.bold,
@@ -1054,7 +1154,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          'Clear all limits and FD configurations',
+                          'Clear all local data and erase Firebase cloud backup',
                           style: TextStyle(
                             fontSize: 10,
                             fontWeight: FontWeight.w500,
@@ -1139,101 +1239,108 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  Future<void> _hardResetCreditCards(BuildContext context) async {
-    final option = await showDialog<String>(
+  Future<void> _handleFullHardReset(BuildContext context) async {
+    final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Hard Reset Credit Cards & FDs'),
+        title: const Row(
+          children: [
+            Icon(Icons.warning_amber_rounded, color: Colors.redAccent),
+            SizedBox(width: 8),
+            Text('Hard Reset All Data?'),
+          ],
+        ),
         content: const Text(
-          'Choose how you want to reset your credit card and FD data on this device:',
+          'This action will PERMANENTLY erase all your local app data (transactions, accounts, budgets, credit cards, investments, diet profiles, etc.) AND delete your backup stored on Firebase Cloud.\n\nThis cannot be undone. Are you sure you want to proceed?',
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(ctx, 'cancel'),
+            onPressed: () => Navigator.pop(ctx, false),
             child: const Text('Cancel'),
           ),
           ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, 'zero'),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.orange, foregroundColor: Colors.white),
-            child: const Text('Reset to Zero Balance'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, 'seed'),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.blue, foregroundColor: Colors.white),
-            child: const Text('Reset to Seeded Setup'),
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.redAccent,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Delete Everything'),
           ),
         ],
       ),
     );
 
-    if (option == null || option == 'cancel' || !context.mounted) return;
+    if (confirm != true || !context.mounted) return;
 
     try {
+      CloudSyncService.isSyncPaused = true;
+
+      final categoriesBox = await Hive.openBox<CategoryModel>('categories');
+      final expensesBox = await Hive.openBox<ExpenseModel>('expenses');
+      final accountsBox = await Hive.openBox<AccountModel>('accounts');
+      final savingsBox = await Hive.openBox<SavingsModel>('savingsBox');
+      final incomesBox = await Hive.openBox<IncomeModel>('incomeBox');
+      final mileageBox = await Hive.openBox<MileageEntryModel>('mileageBox');
+      final transferBox = await Hive.openBox<TransferModel>('transferBox');
+      final goalBox = await Hive.openBox<GoalModel>('goalBox');
+      final serviceBox = await Hive.openBox<ServiceModel>('serviceBox');
+      final dietProfileBox = await Hive.openBox<DietProfileModel>('dietProfileBox');
+      final mealEntryBox = await Hive.openBox<MealEntryModel>('mealEntryBox');
+      final transactionBox = await Hive.openBox<TransactionModel>('transactions_box');
+      final borrowLendBox = await Hive.openBox<BorrowLendModel>('borrowLendBox');
+      final emiTrackerBox = await Hive.openBox<EmiTrackerModel>('emiTrackerBox');
+      final investmentBox = await Hive.openBox<InvestmentModel>('investmentBox');
       final ccAccountBox = await Hive.openBox<CreditCardAccountModel>('credit_card_account_box');
       final fdBox = await Hive.openBox<FdLotModel>('fd_lots_box');
       final statementBox = await Hive.openBox<CreditCardStatementModel>('credit_card_statements_box');
       final cashbackBox = await Hive.openBox<CashbackTransactionModel>('cashback_transactions_box');
 
+      await categoriesBox.clear();
+      await expensesBox.clear();
+      await accountsBox.clear();
+      await savingsBox.clear();
+      await incomesBox.clear();
+      await mileageBox.clear();
+      await transferBox.clear();
+      await goalBox.clear();
+      await serviceBox.clear();
+      await dietProfileBox.clear();
+      await mealEntryBox.clear();
+      await transactionBox.clear();
+      await borrowLendBox.clear();
+      await emiTrackerBox.clear();
+      await investmentBox.clear();
       await ccAccountBox.clear();
       await fdBox.clear();
       await statementBox.clear();
       await cashbackBox.clear();
 
-      if (option == 'zero') {
-        // Seed a zero-balance account directly so that repository doesn't re-seed default values
-        final zeroCc = CreditCardAccountModel(
-          id: 'supermoney',
-          name: 'Credit Card',
-          creditLimit: 0.0,
-          availableCredit: 0.0,
-          usedCredit: 0.0,
-          cashbackPending: 0.0,
-          cashbackAvailable: 0.0,
-          cashbackRedeemed: 0.0,
-          lifetimeCashback: 0.0,
-          statementDateDay: 1,
-          dueDateDay: 15,
-          initialCreditMigrated: true,
-          lastUpdated: DateTime.now(),
-        );
-        await ccAccountBox.put('supermoney_account', zeroCc);
-      } else if (option == 'seed') {
-        // Seed initial default values and initial FD lot
-        final initialCc = CreditCardAccountModel(
-          id: 'supermoney',
-          name: 'Credit Card',
-          creditLimit: 21204.0,
-          availableCredit: 6790.0,
-          usedCredit: 14414.0,
-          cashbackPending: 371.38,
-          cashbackAvailable: 166.08,
-          cashbackRedeemed: 741.92,
-          lifetimeCashback: 1279.38,
-          statementDateDay: 1,
-          dueDateDay: 15,
-          initialCreditMigrated: true,
-          lastUpdated: DateTime.now(),
-        );
-        await ccAccountBox.put('supermoney_account', initialCc);
+      if (await Hive.boxExists('settingsBox')) {
+        final settingsBox = await Hive.openBox('settingsBox');
+        await settingsBox.clear();
+      }
 
-        final now = DateTime.now();
-        final initialFd = FdLotModel(
-          id: 'fd_initial_seeded',
-          principal: 23560.0,
-          currentValue: 24016.39,
-          depositDate: now.subtract(const Duration(days: 120)),
-          maturityDate: now.add(const Duration(days: 245)),
-          lockUntil: now.subtract(const Duration(days: 113)),
-          interestRate: 6.0,
-          status: 'active',
-          autoRenew: true,
-          renewHistory: [],
-          remarks: 'Seeded Migration FD Lot',
-        );
-        await fdBox.put(initialFd.id, initialFd);
+      final user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        final remoteDataSource = FirebaseDataSource(FirebaseFirestore.instance);
+        await remoteDataSource.deleteUserData(user.uid);
       }
 
       if (context.mounted) {
+        final currentMonth = context.read<MonthViewModel>().currentMonth;
+        context.read<BudgetViewModel>().loadCategories(currentMonth);
+        context.read<ExpenseViewModel>().loadExpenses();
+        context.read<AccountsViewModel>().loadAccounts();
+        context.read<SavingsViewModel>().loadSavings();
+        context.read<IncomeViewModel>().loadIncomes();
+        context.read<TransferViewModel>().loadTransfers();
+        context.read<GoalsViewModel>().loadGoals();
+        context.read<ServiceViewModel>().loadServices();
+        context.read<DietViewModel>().loadDietData();
+        context.read<EmiTrackerViewModel>().loadEmis();
+        context.read<BorrowLendViewModel>().loadEntries();
+        context.read<InvestmentViewModel>().loadInvestments();
+        context.read<MileageViewModel>().loadEntries();
         context.read<CreditCardBloc>().add(LoadCreditCardAccountEvent());
         context.read<FdLotsBloc>().add(LoadFdLotsEvent());
         context.read<StatementBloc>().add(LoadStatementsEvent());
@@ -1241,13 +1348,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
         AppSnackBar.show(
           context,
-          message: option == 'zero'
-              ? 'Credit card reset to zero balance successfully!'
-              : 'Credit card reset to default seeded state successfully!',
+          message: 'Hard Reset completed successfully. All local data and Firebase cloud backup cleared.',
           isError: false,
         );
-
-        CloudSyncService.triggerSync();
       }
     } catch (e) {
       if (context.mounted) {
@@ -1257,6 +1360,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
           isError: true,
         );
       }
+    } finally {
+      CloudSyncService.isSyncPaused = false;
     }
   }
 
@@ -1648,89 +1753,36 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   void _showBudgetDialog(BuildContext context, SettingsViewModel settingsVM) {
-    final ctrl = TextEditingController(text: settingsVM.settings.monthlyBudgetLimit.toString());
-
-    showDialog(
+    ModernBudgetTargetDialog.show(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Set Monthly Budget Limit'),
-        content: TextField(
-          controller: ctrl,
-          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          decoration: const InputDecoration(labelText: 'Monthly Budget Limit'),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-          ElevatedButton(
-            onPressed: () async {
-              final val = double.tryParse(ctrl.text);
-              if (val != null && val >= 0) {
-                await settingsVM.updateMonthlyBudget(val);
-                if (ctx.mounted) Navigator.pop(ctx);
-              }
-            },
-            child: const Text('Save'),
-          ),
-        ],
-      ),
+      type: BudgetTargetType.monthlyBudget,
+      initialValue: settingsVM.settings.monthlyBudgetLimit,
+      onSave: (newVal) async {
+        await settingsVM.updateMonthlyBudget(newVal);
+      },
     );
   }
 
   void _showSavingsGoalDialog(BuildContext context, SettingsViewModel settingsVM) {
-    final ctrl = TextEditingController(text: settingsVM.settings.savingsGoal.toString());
-
-    showDialog(
+    ModernBudgetTargetDialog.show(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Set Savings Goal'),
-        content: TextField(
-          controller: ctrl,
-          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          decoration: const InputDecoration(labelText: 'Savings Goal'),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-          ElevatedButton(
-            onPressed: () async {
-              final val = double.tryParse(ctrl.text);
-              if (val != null && val >= 0) {
-                await settingsVM.updateSavingsGoal(val);
-                if (ctx.mounted) Navigator.pop(ctx);
-              }
-            },
-            child: const Text('Save'),
-          ),
-        ],
-      ),
+      type: BudgetTargetType.savingsGoal,
+      initialValue: settingsVM.settings.savingsGoal,
+      onSave: (newVal) async {
+        await settingsVM.updateSavingsGoal(newVal);
+      },
     );
   }
 
   void _showEmergencyFundGoalDialog(BuildContext context, SettingsViewModel settingsVM) {
-    final ctrl = TextEditingController(text: settingsVM.settings.emergencyFundGoal.toString());
-
-    showDialog(
+    ModernBudgetTargetDialog.show(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Set Emergency Fund Goal'),
-        content: TextField(
-          controller: ctrl,
-          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          decoration: const InputDecoration(labelText: 'Emergency Fund Goal'),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-          ElevatedButton(
-            onPressed: () async {
-              final val = double.tryParse(ctrl.text);
-              if (val != null && val >= 0) {
-                await settingsVM.updateEmergencyFundGoal(val);
-                if (ctx.mounted) Navigator.pop(ctx);
-              }
-            },
-            child: const Text('Save'),
-          ),
-        ],
-      ),
+      type: BudgetTargetType.emergencyFund,
+      initialValue: settingsVM.settings.emergencyFundGoal,
+      monthlyBudgetLimit: settingsVM.settings.monthlyBudgetLimit,
+      onSave: (newVal) async {
+        await settingsVM.updateEmergencyFundGoal(newVal);
+      },
     );
   }
 

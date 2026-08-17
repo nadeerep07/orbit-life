@@ -4,11 +4,17 @@ import '../datasources/local_data_source.dart';
 import '../models/transaction_model.dart';
 import '../models/account_model.dart';
 import '../models/savings_model.dart';
+import '../../features/credit_card/data/datasources/credit_card_local_data_source.dart';
+import '../../features/credit_card/data/models/credit_card_account_model.dart';
 
 class TransactionRepositoryImpl implements TransactionRepository {
   final LocalDataSource localDataSource;
+  final CreditCardLocalDataSource? creditCardLocalDataSource;
 
-  TransactionRepositoryImpl(this.localDataSource);
+  TransactionRepositoryImpl(
+    this.localDataSource, {
+    this.creditCardLocalDataSource,
+  });
 
   @override
   Future<List<TransactionEntity>> getAllTransactions() async {
@@ -64,6 +70,8 @@ class TransactionRepositoryImpl implements TransactionRepository {
 
     // 2. Compute dynamic balances for accounts
     for (var acc in accounts) {
+      if (acc.id == 'supermoney') continue; // Credit card balance handled separately below
+
       double balance = 0.0;
       for (var tx in transactions) {
         if (tx.accountId == acc.id) {
@@ -93,7 +101,63 @@ class TransactionRepositoryImpl implements TransactionRepository {
       await localDataSource.updateAccount(updatedAcc);
     }
 
-    // 3. Compute dynamic balance for savings
+    // 3. Compute dynamic balances for Credit Card account if present
+    if (creditCardLocalDataSource != null) {
+      final ccAccountModel = await creditCardLocalDataSource!.getCreditCardAccount();
+      if (ccAccountModel != null) {
+        double netTxUsage = 0.0;
+        for (var tx in transactions) {
+          if (tx.accountId == ccAccountModel.id) {
+            if (tx.type == TransactionType.income || tx.type == TransactionType.borrow) {
+              netTxUsage -= tx.amount;
+            } else {
+              netTxUsage += tx.amount;
+            }
+          }
+          if (tx.targetAccountId == ccAccountModel.id) {
+            if (tx.type == TransactionType.transfer ||
+                tx.type == TransactionType.savings ||
+                tx.type == TransactionType.income) {
+              netTxUsage -= tx.amount;
+            }
+          }
+        }
+
+        const double initialBaseUsedCredit = 14414.0;
+        final double usedCredit = (initialBaseUsedCredit + netTxUsage).clamp(0.0, ccAccountModel.creditLimit);
+        final double availableCredit = (ccAccountModel.creditLimit - usedCredit).clamp(0.0, ccAccountModel.creditLimit);
+
+        final updatedCcModel = CreditCardAccountModel(
+          id: ccAccountModel.id,
+          name: ccAccountModel.name,
+          creditLimit: ccAccountModel.creditLimit,
+          availableCredit: availableCredit,
+          usedCredit: usedCredit,
+          cashbackPending: ccAccountModel.cashbackPending,
+          cashbackAvailable: ccAccountModel.cashbackAvailable,
+          cashbackRedeemed: ccAccountModel.cashbackRedeemed,
+          lifetimeCashback: ccAccountModel.lifetimeCashback,
+          statementDateDay: ccAccountModel.statementDateDay,
+          dueDateDay: ccAccountModel.dueDateDay,
+          initialCreditMigrated: ccAccountModel.initialCreditMigrated,
+          lastUpdated: DateTime.now(),
+        );
+        await creditCardLocalDataSource!.saveCreditCardAccount(updatedCcModel);
+
+        // Update AccountModel for supermoney so openingBalance represents availableCredit
+        final superMoneyAcc = accounts.where((a) => a.id == ccAccountModel.id).firstOrNull;
+        if (superMoneyAcc != null) {
+          final updatedSuperMoney = AccountModel(
+            id: superMoneyAcc.id,
+            name: superMoneyAcc.name,
+            openingBalance: availableCredit,
+          );
+          await localDataSource.updateAccount(updatedSuperMoney);
+        }
+      }
+    }
+
+    // 4. Compute dynamic balance for savings
     double totalAdded = 0.0;
     double totalDebited = 0.0;
     for (var tx in transactions) {

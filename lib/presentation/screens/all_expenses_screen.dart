@@ -386,7 +386,8 @@ class _AllExpensesScreenState extends State<AllExpensesScreen> {
         icon: const Icon(Icons.add_rounded),
         label: const Text('Add Expense', style: TextStyle(fontWeight: FontWeight.bold)),
       ),
-      body: Center(
+      body: Align(
+        alignment: Alignment.topCenter,
         child: ConstrainedBox(
           constraints: BoxConstraints(maxWidth: r.contentMaxWidth),
           child: Column(

@@ -26,8 +26,7 @@ class CreditCardRepositoryImpl implements CreditCardRepository {
   Future<CreditCardAccountEntity> getCreditCardAccount() async {
     final model = await localDataSource.getCreditCardAccount();
     if (model == null) {
-      // Seed default account matching exact migration specifications
-      final initial = CreditCardAccountEntity.initialSeeded();
+      final initial = CreditCardAccountEntity.zero();
       await saveCreditCardAccount(initial);
       return initial;
     }
@@ -38,6 +37,11 @@ class CreditCardRepositoryImpl implements CreditCardRepository {
   Future<void> saveCreditCardAccount(CreditCardAccountEntity account) async {
     final model = CreditCardAccountModel.fromEntity(account);
     await localDataSource.saveCreditCardAccount(model);
+  }
+
+  @override
+  Stream<void> watchCreditCardAccount() {
+    return localDataSource.watchCreditCardAccount();
   }
 
   @override

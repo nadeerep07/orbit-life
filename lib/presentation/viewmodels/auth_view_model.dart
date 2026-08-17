@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
@@ -38,7 +39,10 @@ class AppUser {
 class AuthViewModel extends ChangeNotifier {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final GoogleSignIn _googleSignIn = GoogleSignIn(
-    clientId: '147298740710-7v4al3sdq8jvlotk473teqbt15vt9tsf.apps.googleusercontent.com',
+    clientId: kIsWeb || defaultTargetPlatform == TargetPlatform.iOS
+        ? '147298740710-7v4al3sdq8jvlotk473teqbt15vt9tsf.apps.googleusercontent.com'
+        : null,
+    serverClientId: '147298740710-a9d76hqt8sshff328lp7jnvi0rl3168u.apps.googleusercontent.com',
     scopes: ['email', 'profile'],
   );
 

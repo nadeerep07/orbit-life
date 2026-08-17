@@ -23,6 +23,13 @@ class AccountsViewModel extends ChangeNotifier {
         loadAccounts(silent: true);
       });
     } catch (_) {}
+    try {
+      if (Hive.isBoxOpen('credit_card_account_box')) {
+        Hive.box('credit_card_account_box').watch().listen((event) {
+          loadAccounts(silent: true);
+        });
+      }
+    } catch (_) {}
   }
 
   Future<void> loadAccounts({bool silent = false}) async {
@@ -35,6 +42,27 @@ class AccountsViewModel extends ChangeNotifier {
 
     _accounts = await _accountRepository.getAccounts();
 
+    // Sync supermoney credit card available credit if present
+    try {
+      if (await Hive.boxExists('credit_card_account_box')) {
+        final ccBox = await Hive.openBox('credit_card_account_box');
+        final ccAcc = ccBox.get('supermoney_account');
+        if (ccAcc != null) {
+          final double ccAvailable = (ccAcc.availableCredit as num).toDouble();
+          final idx = _accounts.indexWhere((acc) => acc.id == 'supermoney');
+          if (idx != -1 && _accounts[idx].openingBalance != ccAvailable) {
+            final updated = AccountEntity(
+              id: 'supermoney',
+              name: 'Credit Card',
+              openingBalance: ccAvailable,
+            );
+            await _accountRepository.updateAccount(updated);
+            _accounts[idx] = updated;
+          }
+        }
+      }
+    } catch (_) {}
+
     // Ensure supermoney account displays as 'Credit Card'
     final superMoneyIdx = _accounts.indexWhere((acc) => acc.id == 'supermoney');
     if (superMoneyIdx != -1 && _accounts[superMoneyIdx].name != 'Credit Card') {
@@ -45,30 +73,6 @@ class AccountsViewModel extends ChangeNotifier {
       );
       await _accountRepository.updateAccount(updated);
       _accounts[superMoneyIdx] = updated;
-    }
-
-    // Setup predefined accounts if none exist
-    if (_accounts.isEmpty) {
-      final defaults = [
-        const AccountEntity(id: 'sbi', name: 'SBI', openingBalance: 0),
-        const AccountEntity(id: 'hdfc', name: 'HDFC', openingBalance: 0),
-        const AccountEntity(
-          id: 'airtel',
-          name: 'Airtel Payment Bank',
-          openingBalance: 0,
-        ),
-        const AccountEntity(
-          id: 'supermoney',
-          name: 'Credit Card',
-          openingBalance: 0,
-        ),
-        const AccountEntity(id: 'cash', name: 'Cash', openingBalance: 0),
-      ];
-
-      for (var acc in defaults) {
-        await _accountRepository.addAccount(acc);
-      }
-      _accounts = defaults;
     }
 
     _isLoading = false;

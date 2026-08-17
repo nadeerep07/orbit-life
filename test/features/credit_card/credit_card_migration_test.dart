@@ -4,29 +4,26 @@ import 'package:my_budget_pro/features/credit_card/domain/entities/fd_lot_entity
 
 void main() {
   group('Credit Card Migration & Preservation Tests', () {
-    test('Seeded initial credit card state matches exact user parameters including cashback breakdown', () {
-      final seeded = CreditCardAccountEntity.initialSeeded();
+    test('Initial credit card state is zeroed', () {
+      final zero = CreditCardAccountEntity.zero();
 
-      expect(seeded.id, equals('supermoney'));
-      expect(seeded.creditLimit, equals(21204.0));
-      expect(seeded.availableCredit, equals(6790.0));
-      expect(seeded.usedCredit, equals(14414.0));
-      expect(seeded.initialCreditMigrated, isTrue);
+      expect(zero.id, equals('supermoney'));
+      expect(zero.creditLimit, equals(0.0));
+      expect(zero.availableCredit, equals(0.0));
+      expect(zero.usedCredit, equals(0.0));
+      expect(zero.initialCreditMigrated, isTrue);
 
-      // Exact user cashback breakdown figures
-      expect(seeded.lifetimeCashback, equals(1279.38));
-      expect(seeded.cashbackRedeemed, equals(741.92));
-      expect(seeded.cashbackPending, equals(371.38));
-      expect(seeded.cashbackAvailable, equals(166.08));
+      expect(zero.lifetimeCashback, equals(0.0));
+      expect(zero.cashbackRedeemed, equals(0.0));
+      expect(zero.cashbackPending, equals(0.0));
+      expect(zero.cashbackAvailable, equals(0.0));
 
-      // Mathematical balance relation: Redeemed + Pending + Available == Lifetime
       expect(
-        seeded.cashbackRedeemed + seeded.cashbackPending + seeded.cashbackAvailable,
-        closeTo(seeded.lifetimeCashback, 0.01),
+        zero.cashbackRedeemed + zero.cashbackPending + zero.cashbackAvailable,
+        equals(zero.lifetimeCashback),
       );
 
-      // Verify credit limit balance relation: Used + Available == Limit
-      expect(seeded.usedCredit + seeded.availableCredit, equals(seeded.creditLimit));
+      expect(zero.usedCredit + zero.availableCredit, equals(zero.creditLimit));
     });
 
     test('Initial seeded FD lot matches ₹23,560 principal and ₹24,016.39 value', () {

@@ -14,6 +14,30 @@
       },
       "oauth_client": [
         {
+          "client_id": "147298740710-31u9ildseem6pbcj6541t0fio8khfepf.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.plustudios.my_budget_pro",
+            "certificate_hash": "bea0e668c2ed8bd44ca4e026def9bba23cd465c7"
+          }
+        },
+        {
+          "client_id": "147298740710-7d70205flnels41b2l3u7ogkvomerlrp.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.plustudios.my_budget_pro",
+            "certificate_hash": "c7a620284bd9b4b69707b45371a6e34c9ecb1aa0"
+          }
+        },
+        {
+          "client_id": "147298740710-gprg441t1ml92n45g4ev8292mjfiv3bq.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.plustudios.my_budget_pro",
+            "certificate_hash": "4d372fb1628463ff6b93aa28699f8f9817bb6fd3"
+          }
+        },
+        {
           "client_id": "147298740710-a9d76hqt8sshff328lp7jnvi0rl3168u.apps.googleusercontent.com",
           "client_type": 3
         }
@@ -29,6 +53,13 @@
             {
               "client_id": "147298740710-a9d76hqt8sshff328lp7jnvi0rl3168u.apps.googleusercontent.com",
               "client_type": 3
+            },
+            {
+              "client_id": "147298740710-7v4al3sdq8jvlotk473teqbt15vt9tsf.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.plustudios.myBudgetPro"
+              }
             }
           ]
         }

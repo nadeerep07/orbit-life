@@ -11,6 +11,7 @@ abstract class CreditCardLocalDataSource {
 
   Future<CreditCardAccountModel?> getCreditCardAccount();
   Future<void> saveCreditCardAccount(CreditCardAccountModel account);
+  Stream<BoxEvent> watchCreditCardAccount();
 
   Future<List<FdLotModel>> getFdLots();
   Future<void> addFdLot(FdLotModel lot);
@@ -76,6 +77,11 @@ class CreditCardLocalDataSourceImpl implements CreditCardLocalDataSource {
   @override
   Future<void> saveCreditCardAccount(CreditCardAccountModel account) async {
     await _accountBox.put('supermoney_account', account);
+  }
+
+  @override
+  Stream<BoxEvent> watchCreditCardAccount() {
+    return _accountBox.watch();
   }
 
   @override

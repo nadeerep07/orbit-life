@@ -32,7 +32,8 @@ class AccountsScreen extends StatelessWidget {
         elevation: 0,
         backgroundColor: Colors.transparent,
       ),
-      body: Center(
+      body: Align(
+        alignment: Alignment.topCenter,
         child: ConstrainedBox(
           constraints: BoxConstraints(maxWidth: r.contentMaxWidth),
           child: SingleChildScrollView(

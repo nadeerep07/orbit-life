@@ -61,4 +61,9 @@ class FirebaseDataSource {
     }
     return null;
   }
+
+  // Delete user data
+  Future<void> deleteUserData(String userId) async {
+    await firestore.collection('users').doc(userId).delete();
+  }
 }

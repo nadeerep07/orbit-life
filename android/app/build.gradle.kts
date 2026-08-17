@@ -50,13 +50,33 @@ android {
         versionName = flutter.versionName
     }
 
-    buildTypes {
-        release {
-            signingConfig = signingConfigs.getByName("release")
-            isMinifyEnabled = false
-            isShrinkResources = false
+buildTypes {
+    release {
+        signingConfig = signingConfigs.getByName("release")
+
+        // Enable code shrinking & obfuscation
+        isMinifyEnabled = true
+
+        // Remove unused resources
+        isShrinkResources = true
+
+        // Use optimized ProGuard configuration
+        proguardFiles(
+            getDefaultProguardFile("proguard-android-optimize.txt"),
+            "proguard-rules.pro"
+        )
+
+        // Generate native debug symbols for Play Console
+        ndk {
+            debugSymbolLevel = "FULL"
         }
     }
+
+    debug {
+        isMinifyEnabled = false
+        isShrinkResources = false
+    }
+  }
 }
 
 flutter {
