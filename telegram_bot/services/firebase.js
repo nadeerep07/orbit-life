@@ -293,7 +293,7 @@ async function logMileage(userId, { odometer, liters, totalCost, pricePerLiter, 
 /**
  * Save Full Onboarding Data
  */
-async function saveOnboardingProfile(userId, { accounts = [], incomes = [], recurringExpenses = [], emis = [], goals = [], creditCards = [], borrowLends = [], savingsTarget = null }) {
+async function saveOnboardingProfile(userId, { accounts = [], incomes = [], recurringExpenses = [], emis = [], goals = [], creditCards = [], fixedDeposits = [], borrowLends = [], savingsTarget = null }) {
   const firestore = getDb();
   const userRef = firestore.collection("users").doc(userId);
   const now = new Date().toISOString();
@@ -362,14 +362,59 @@ async function saveOnboardingProfile(userId, { accounts = [], incomes = [], recu
   }));
 
   // Formatted Credit Card
-  const primaryCc = creditCards && creditCards.length > 0 ? {
+  let primaryCc = null;
+  if (creditCards && creditCards.length > 0) {
+    const cc = creditCards[0];
+    const limit = Number(cc.totalLimit || cc.limit || cc.creditLimit || 26713.8);
+    const used = Number(cc.used || cc.usedLimit || cc.usedCredit || 10000.0);
+    const available = Number(cc.availableCredit || (limit - used));
+    primaryCc = {
+      id: "supermoney_account",
+      name: cc.name || "Supermoney Secured Credit Card",
+      creditLimit: limit,
+      availableCredit: available,
+      usedCredit: used,
+      statementDateDay: Number(cc.statementDate || cc.statementDateDay || 1),
+      dueDateDay: Number(cc.dueDate || cc.dueDateDay || 15),
+      initialCreditMigrated: false,
+      lastUpdated: now,
+      cashbackPending: 371.38,
+      cashbackAvailable: 166.08,
+      lifetimeCashback: 1279.38,
+      cashbackRedeemed: 741.92,
+    };
+  }
+
+  // Formatted Fixed Deposits (FD Lots)
+  const formattedFds = (fixedDeposits || []).map((fd) => ({
     id: uuidv4(),
-    cardName: creditCards[0].name || "Supermoney Credit Card",
-    totalLimit: Number(creditCards[0].totalLimit || creditCards[0].limit || 26713.8),
-    statementDate: Number(creditCards[0].statementDate || 1),
-    dueDate: Number(creditCards[0].dueDate || 15),
-    usedLimit: Number(creditCards[0].used || creditCards[0].usedLimit || 0),
-  } : null;
+    principal: Number(fd.amount || fd.principal || 29682),
+    currentValue: Number(fd.amount || fd.currentValue || 29682),
+    depositDate: now,
+    maturityDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
+    lockUntil: new Date(Date.now() + 45 * 24 * 60 * 60 * 1000).toISOString(),
+    interestRate: Number(fd.interestRate || 6.0),
+    status: "active",
+    autoRenew: true,
+    renewHistory: [],
+    remarks: fd.issuer || "Supermoney Utkarsh Bank FD",
+  }));
+
+  if (formattedFds.length === 0 && primaryCc) {
+    formattedFds.push({
+      id: uuidv4(),
+      principal: 29682.0,
+      currentValue: 29682.0,
+      depositDate: now,
+      maturityDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
+      lockUntil: new Date(Date.now() + 45 * 24 * 60 * 60 * 1000).toISOString(),
+      interestRate: 6.0,
+      status: "active",
+      autoRenew: true,
+      renewHistory: [],
+      remarks: "Supermoney Utkarsh Bank FD",
+    });
+  }
 
   const updatePayload = {
     accounts: formattedAccounts,
@@ -378,6 +423,7 @@ async function saveOnboardingProfile(userId, { accounts = [], incomes = [], recu
     emis: formattedEmis,
     goals: formattedGoals,
     borrowLends: formattedBorrowLends,
+    fdLots: formattedFds,
     lastBackup: admin.firestore.FieldValue.serverTimestamp(),
     isOnboarded: true,
   };

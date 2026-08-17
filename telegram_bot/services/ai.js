@@ -63,14 +63,16 @@ Analyze the user's message and categorize it into one of the following intents:
    - pricePerLiter: number (optional)
    - notes: string (e.g. "Petrol full tank")
 
-5. "ONBOARDING": The user is describing multiple accounts, salary, EMIs, credit cards, or goals to set up their entire financial profile.
+5. "ONBOARDING": The user is describing multiple accounts, salary, EMIs, credit cards, fixed deposits, or goals to set up their entire financial profile.
    Extract:
    - accounts: array of { name: string, balance: number }
    - incomes: array of { source: string, amount: number }
    - recurringExpenses: array of { name: string, amount: number, category: string }
-   - emis: array of { name: string, monthlyAmount: number, months: number }
+   - emis: array of { name: string, amount: number, remainingMonths: number }
+   - creditCards: array of { name: string, totalLimit: number, used: number, statementDate: number, dueDate: number }
+   - fixedDeposits: array of { issuer: string, amount: number, interestRate: number }
+   - borrowLends: array of { to: string, contact: string, amount: number, date: string, type: "lent" | "borrowed" }
    - goals: array of { name: string, targetAmount: number }
-   - creditCards: array of { name: string, limit: number }
 
 6. "QUERY": The user is asking a question about their finances, spending, or app status.
    Extract:
