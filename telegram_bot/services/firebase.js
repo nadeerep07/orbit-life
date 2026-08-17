@@ -378,10 +378,10 @@ async function saveOnboardingProfile(userId, { accounts = [], incomes = [], recu
       dueDateDay: Number(cc.dueDate || cc.dueDateDay || 15),
       initialCreditMigrated: false,
       lastUpdated: now,
-      cashbackPending: 371.38,
-      cashbackAvailable: 166.08,
-      lifetimeCashback: 1279.38,
-      cashbackRedeemed: 741.92,
+      cashbackPending: Number(cc.cashbackPending || 0.0),
+      cashbackAvailable: Number(cc.cashbackAvailable || 0.0),
+      lifetimeCashback: Number(cc.lifetimeCashback || 0.0),
+      cashbackRedeemed: Number(cc.cashbackRedeemed || 0.0),
     };
   }
 
