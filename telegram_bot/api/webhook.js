@@ -29,18 +29,21 @@ initializeFirebase();
 
 const bot = new Telegraf(BOT_TOKEN);
 
-// Persistent Quick Access Auto-Suggestions Keyboard
+const WEB_APP_URL = "https://orbit-life-zeta.vercel.app/";
+
+// ─── CUSTOM PERSISTENT REPLY KEYBOARD ───────────────────────────────────────
 const mainMenu = Markup.keyboard([
+  ["📊 Today's Stats", "🎯 Daily Scorecard"],
   ["🏦 Live Balances", "💳 Supermoney Card"],
-  ["📑 EMIs & Dues", "🤝 Debts (Borrow/Lend)"],
-  ["📊 Analytics & Stats", "💡 Quick Examples"],
+  ["📑 Active EMIs", "🤝 Borrow & Lend"],
+  [Markup.button.webApp("🌐 Open Web Dashboard", WEB_APP_URL)],
 ]).resize();
 
 // Inline Action Chips
 const postActionChips = Markup.inlineKeyboard([
   [
     Markup.button.callback("🏦 View Balance", "quick_balance"),
-    Markup.button.callback("📊 Today's Spends", "quick_today"),
+    Markup.button.callback("🎯 Scorecard", "quick_scorecard"),
   ],
   [
     Markup.button.callback("💳 Supermoney Card", "quick_card"),
@@ -48,25 +51,24 @@ const postActionChips = Markup.inlineKeyboard([
   ],
 ]);
 
-// ─── COMMANDS ───────────────────────────────────────────────────────────────
-
+// ─── COMMAND: /start ────────────────────────────────────────────────────────
 bot.start(async (ctx) => {
   const chatId = ctx.chat.id;
   const userId = await getUserIdByChatId(chatId);
 
-  let msg = `👋 *Welcome to OrbitLife Full Automation Bot!*\n\n` +
-    `Every feature of your financial dashboard can now be automated directly from Telegram (₹ INR):\n\n`;
+  let msg = `👋 *Welcome to OrbitLife Full Financial Coach!*\n\n` +
+    `Automate your personal finances, track Supermoney card limits, EMIs, and daily safe limits in Indian Rupees (₹ INR):\n\n`;
 
   if (userId) {
     msg += `✅ *Connected to App:* \`${userId.substring(0, 8)}...\`\n\n` +
-      `⚡ *Tap Any Button Below or Send Text/Voice:*\n` +
-      `• *Log Expenses:* _"Spent ₹350 on lunch with UPI"_\n` +
-      `• *Credit Card Spends:* _"Spent ₹1,200 on Supermoney card"_\n` +
+      `⚡ *Tap Any Quick Action Below or Send Text/Voice:*\n` +
+      `• *Log Spends:* _"Spent ₹350 on lunch with UPI"_\n` +
+      `• *Card Spends:* _"Spent ₹1,200 on Supermoney card"_\n` +
       `• *Log Salary:* _"Received ₹29,600 salary"_\n` +
       `• *Mark EMI Paid:* _"Paid College EMI ₹3,750"_\n` +
       `• *Debt Repayment:* _"Shamveel paid back ₹5,000"_\n` +
       `• *Pay Card Bill:* _"Paid ₹10,000 credit card bill"_\n` +
-      `• *Check Balances:* _/balance_ or tap *🏦 Live Balances*\n` +
+      `• *Daily Scorecard:* Tap *🎯 Daily Scorecard*\n` +
       `• *Snap Receipt or Food Photo:* Send any picture! 📸`;
   } else {
     msg += `⚠️ *Account Not Linked!*\n\nSend: \`/link YOUR_FIREBASE_USER_ID\``;
@@ -112,7 +114,101 @@ bot.command("whoami", async (ctx) => {
   }
 });
 
-// ─── COMMAND: /balance ───────────────────────────────────────────────────────
+// ─── ACTION: 🎯 DAILY SCORECARD ────────────────────────────────────────────
+async function handleDailyScorecard(ctx) {
+  const chatId = ctx.chat.id;
+  const userId = await getUserIdByChatId(chatId);
+  if (!userId) return ctx.reply("⚠️ Please link your account first using `/link <USER_ID>`.");
+
+  try {
+    const summary = await getSummary(userId);
+    const balanceData = await getBalances(userId);
+    const debtData = await getEmisAndDebts(userId);
+    const userData = await getUserData(userId);
+
+    const todayStr = new Date().toISOString().split("T")[0];
+
+    // Calculate Daily Safe Limit
+    const monthlyIncome = Number(summary?.monthEarned || 29600);
+    const fixedOutflows = (userData?.emis || []).reduce((sum, e) => sum + (Number(e.monthlyEmi || e.amount) || 0), 0) + 1059; // EMIs + Fixed Bills
+    const monthlySurplus = Math.max(0, monthlyIncome - fixedOutflows);
+    const dailySafeLimit = Math.round(monthlySurplus / 30) || 700;
+    const spentToday = Math.round(summary?.todaySpent || 0);
+
+    const isSpendUnderLimit = spentToday <= dailySafeLimit;
+    const spendStatusEmoji = isSpendUnderLimit ? "✅" : "⚠️";
+
+    // Credit Card Utilization
+    const cc = balanceData?.creditCard;
+    const ccLimit = cc?.limit || 26713.8;
+    const ccUsed = cc?.used || 0;
+    const ccRatio = Math.round((ccUsed / ccLimit) * 100);
+    const ccStatusEmoji = ccRatio <= 30 ? "✅" : ccRatio <= 50 ? "🟡" : "🔴";
+
+    // EMIs
+    const totalEmis = debtData?.emis?.length || 0;
+    const totalMonthlyEmi = debtData?.emis?.reduce((sum, e) => sum + e.monthlyEmi, 0) || 0;
+
+    // Nutrition
+    const calories = summary?.todayCalories || 0;
+    const calTarget = summary?.calorieTarget || 2000;
+    const calEmoji = calories > 0 ? "✅" : "⏳";
+
+    let msg = `🎯 *ORBITLIFE DAILY SCORECARD*\n` +
+      `📅 (${todayStr})\n` +
+      `━━━━━━━━━━━━━━━━━━━━\n\n` +
+      `💸 *Daily Spend Cap:* ${spendStatusEmoji} *₹${spentToday.toLocaleString("en-IN")}* / ₹${dailySafeLimit.toLocaleString("en-IN")}\n` +
+      `💳 *Card Utilization:* ${ccStatusEmoji} *${ccRatio}%* (₹${ccUsed.toLocaleString("en-IN")} / ₹${Math.round(ccLimit).toLocaleString("en-IN")})\n` +
+      `🏦 *Liquid Cash:* 💰 *₹${Math.round(balanceData?.totalLiquidCash || 0).toLocaleString("en-IN")}*\n` +
+      `📑 *Active EMIs:* ⏳ *${totalEmis} Active* (₹${totalMonthlyEmi.toLocaleString("en-IN")}/mo)\n` +
+      `🥗 *Daily Calories:* ${calEmoji} *${calories}* / ${calTarget} kcal\n`;
+
+    if (debtData?.borrowLends?.length > 0) {
+      const topDebt = debtData.borrowLends[0];
+      msg += `🤝 *Receivables:* ⏳ *₹${topDebt.amount.toLocaleString("en-IN")}* (${topDebt.personName})\n`;
+    }
+
+    msg += `\n━━━━━━━━━━━━━━━━━━━━\n` +
+      `🔥 *Consistency is King. Win the Day!*`;
+
+    await ctx.reply(msg, { parse_mode: "Markdown", ...mainMenu });
+  } catch (err) {
+    await ctx.reply(`❌ Error generating scorecard: ${err.message}`);
+  }
+}
+bot.command("scorecard", handleDailyScorecard);
+bot.hears("🎯 Daily Scorecard", handleDailyScorecard);
+
+// ─── ACTION: 📊 TODAY'S STATS ──────────────────────────────────────────────
+async function handleStatsQuery(ctx) {
+  const chatId = ctx.chat.id;
+  const userId = await getUserIdByChatId(chatId);
+  if (!userId) return ctx.reply("⚠️ Link account first.");
+
+  try {
+    const summary = await getSummary(userId);
+    if (!summary) return ctx.reply("ℹ️ No data available.");
+
+    const caloriePercent = Math.round((summary.todayCalories / (summary.calorieTarget || 2000)) * 100);
+    const msg = `📊 *OrbitLife Analytics & Today's Stats*\n\n` +
+      `💸 *Spent Today:* ₹${summary.todaySpent.toLocaleString("en-IN", { minimumFractionDigits: 2 })} (${summary.todayExpensesCount} entries)\n` +
+      `📈 *Month Inflow:* ₹${summary.monthEarned.toLocaleString("en-IN", { minimumFractionDigits: 2 })}\n` +
+      `📉 *Month Outflow:* ₹${summary.monthSpent.toLocaleString("en-IN", { minimumFractionDigits: 2 })}\n` +
+      `💼 *Net Monthly Surplus:* ₹${summary.monthNet.toLocaleString("en-IN", { minimumFractionDigits: 2 })}\n\n` +
+      `🥗 *Nutrition Today:*\n` +
+      `• Calories: *${summary.todayCalories}* / ${summary.calorieTarget} kcal (${caloriePercent}%)\n` +
+      `• Protein: *${summary.todayProtein.toFixed(1)}g* | Carbs: *${summary.todayCarbs.toFixed(1)}g* | Fat: *${summary.todayFat.toFixed(1)}g*`;
+
+    await ctx.reply(msg, { parse_mode: "Markdown", ...mainMenu });
+  } catch (err) {
+    await ctx.reply(`❌ Error: ${err.message}`);
+  }
+}
+bot.command("today", handleStatsQuery);
+bot.command("stats", handleStatsQuery);
+bot.hears("📊 Today's Stats", handleStatsQuery);
+
+// ─── ACTION: 🏦 LIVE BALANCES ──────────────────────────────────────────────
 async function handleBalanceQuery(ctx) {
   const chatId = ctx.chat.id;
   const userId = await getUserIdByChatId(chatId);
@@ -146,7 +242,7 @@ async function handleBalanceQuery(ctx) {
 bot.command("balance", handleBalanceQuery);
 bot.hears("🏦 Live Balances", handleBalanceQuery);
 
-// ─── COMMAND: /card ─────────────────────────────────────────────────────────
+// ─── ACTION: 💳 SUPERMONEY CARD ────────────────────────────────────────────
 async function handleCardQuery(ctx) {
   const chatId = ctx.chat.id;
   const userId = await getUserIdByChatId(chatId);
@@ -180,7 +276,7 @@ async function handleCardQuery(ctx) {
 bot.command("card", handleCardQuery);
 bot.hears("💳 Supermoney Card", handleCardQuery);
 
-// ─── COMMAND: /emis ─────────────────────────────────────────────────────────
+// ─── ACTION: 📑 ACTIVE EMIS ────────────────────────────────────────────────
 async function handleEmisQuery(ctx) {
   const chatId = ctx.chat.id;
   const userId = await getUserIdByChatId(chatId);
@@ -211,9 +307,9 @@ async function handleEmisQuery(ctx) {
   }
 }
 bot.command("emis", handleEmisQuery);
-bot.hears("📑 EMIs & Dues", handleEmisQuery);
+bot.hears("📑 Active EMIs", handleEmisQuery);
 
-// ─── COMMAND: /debts ────────────────────────────────────────────────────────
+// ─── ACTION: 🤝 BORROW & LEND ──────────────────────────────────────────────
 async function handleDebtsQuery(ctx) {
   const chatId = ctx.chat.id;
   const userId = await getUserIdByChatId(chatId);
@@ -238,60 +334,7 @@ async function handleDebtsQuery(ctx) {
   }
 }
 bot.command("debts", handleDebtsQuery);
-bot.hears("🤝 Debts (Borrow/Lend)", handleDebtsQuery);
-
-// ─── COMMAND: /today & /stats ───────────────────────────────────────────────
-async function handleStatsQuery(ctx) {
-  const chatId = ctx.chat.id;
-  const userId = await getUserIdByChatId(chatId);
-  if (!userId) return ctx.reply("⚠️ Link account first.");
-
-  try {
-    const summary = await getSummary(userId);
-    if (!summary) return ctx.reply("ℹ️ No data available.");
-
-    const caloriePercent = Math.round((summary.todayCalories / (summary.calorieTarget || 2000)) * 100);
-    const msg = `📊 *OrbitLife Monthly & Daily Analytics*\n\n` +
-      `💸 *Spent Today:* ₹${summary.todaySpent.toLocaleString("en-IN", { minimumFractionDigits: 2 })} (${summary.todayExpensesCount} entries)\n` +
-      `📈 *Month Inflow:* ₹${summary.monthEarned.toLocaleString("en-IN", { minimumFractionDigits: 2 })}\n` +
-      `📉 *Month Outflow:* ₹${summary.monthSpent.toLocaleString("en-IN", { minimumFractionDigits: 2 })}\n` +
-      `💼 *Net Monthly Surplus:* ₹${summary.monthNet.toLocaleString("en-IN", { minimumFractionDigits: 2 })}\n\n` +
-      `🥗 *Nutrition Today:*\n` +
-      `• Calories: *${summary.todayCalories}* / ${summary.calorieTarget} kcal (${caloriePercent}%)\n` +
-      `• Protein: *${summary.todayProtein.toFixed(1)}g* | Carbs: *${summary.todayCarbs.toFixed(1)}g* | Fat: *${summary.todayFat.toFixed(1)}g*`;
-
-    await ctx.reply(msg, { parse_mode: "Markdown", ...mainMenu });
-  } catch (err) {
-    await ctx.reply(`❌ Error: ${err.message}`);
-  }
-}
-bot.command("today", handleStatsQuery);
-bot.command("stats", handleStatsQuery);
-bot.command("analytics", handleStatsQuery);
-bot.hears("📊 Analytics & Stats", handleStatsQuery);
-
-// ─── COMMAND: /help & Quick Examples ────────────────────────────────────────
-async function handleHelpQuery(ctx) {
-  const msg = `💡 *OrbitLife Auto-Suggestion Cheatsheet (₹ INR)*\n\n` +
-    `*1. Spends & Incomes:*\n` +
-    `• _"Spent ₹350 on lunch with UPI"_\n` +
-    `• _"Spent ₹1,200 on Supermoney card"_\n` +
-    `• _"Received ₹29,600 salary"_\n\n` +
-    `*2. EMI Payments:*\n` +
-    `• _"Paid College EMI ₹3,750"_\n` +
-    `• _"Mark iPhone EMI as paid"_\n\n` +
-    `*3. Debts (Borrow / Lend):*\n` +
-    `• _"Shamveel paid back ₹5,000"_\n` +
-    `• _"Lent ₹2,000 to Rahul"_\n\n` +
-    `*4. Credit Card Bill:*\n` +
-    `• _"Paid ₹10,000 credit card bill"_\n\n` +
-    `*5. Live Balances & Stats:*\n` +
-    `• Tap *🏦 Live Balances* or *📊 Analytics & Stats* below!`;
-
-  await ctx.reply(msg, { parse_mode: "Markdown", ...mainMenu });
-}
-bot.command("help", handleHelpQuery);
-bot.hears("💡 Quick Examples", handleHelpQuery);
+bot.hears("🤝 Borrow & Lend", handleDebtsQuery);
 
 // ─── INLINE BUTTON CALLBACKS ────────────────────────────────────────────────
 bot.action("quick_balance", async (ctx) => {
@@ -299,9 +342,9 @@ bot.action("quick_balance", async (ctx) => {
   return handleBalanceQuery(ctx);
 });
 
-bot.action("quick_today", async (ctx) => {
+bot.action("quick_scorecard", async (ctx) => {
   await ctx.answerCbQuery();
-  return handleStatsQuery(ctx);
+  return handleDailyScorecard(ctx);
 });
 
 bot.action("quick_card", async (ctx) => {
@@ -494,14 +537,102 @@ bot.on("text", async (ctx) => {
       if (type === "card") return handleCardQuery(ctx);
       if (type === "emis") return handleEmisQuery(ctx);
       if (type === "debts") return handleDebtsQuery(ctx);
-      return handleStatsQuery(ctx);
+      return handleDailyScorecard(ctx);
     }
 
-    return ctx.reply("🤖 I received your message. Tap *💡 Quick Examples* or *🏦 Live Balances* below!", { parse_mode: "Markdown", ...mainMenu });
+    return ctx.reply("🤖 I received your message. Tap *🎯 Daily Scorecard* or *🏦 Live Balances* below!", { parse_mode: "Markdown", ...mainMenu });
   } catch (err) {
     return ctx.reply(`❌ *Error:* ${err.message}`, { parse_mode: "Markdown", ...mainMenu });
   }
 });
+
+// ─── MINI APP WEB DASHBOARD (HTML RESPONSE) ─────────────────────────────────
+const WEB_DASHBOARD_HTML = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>OrbitLife Live Dashboard</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0b0f19;
+      --card-bg: rgba(255, 255, 255, 0.04);
+      --card-border: rgba(255, 255, 255, 0.08);
+      --primary: #3b82f6;
+      --accent: #10b981;
+      --warning: #f59e0b;
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Outfit', sans-serif; }
+    body { background: var(--bg); color: var(--text); padding: 16px; min-height: 100vh; }
+    .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+    .logo { font-size: 22px; font-weight: 800; background: linear-gradient(135deg, #60a5fa, #3b82f6); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    .badge { background: rgba(16, 185, 129, 0.15); color: #10b981; padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: 600; border: 1px solid rgba(16, 185, 129, 0.3); }
+    .card { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 20px; padding: 18px; margin-bottom: 16px; backdrop-filter: blur(16px); }
+    .title { font-size: 13px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; font-weight: 600; }
+    .amount { font-size: 28px; font-weight: 800; color: #fff; margin-bottom: 12px; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .metric { background: rgba(255, 255, 255, 0.02); padding: 12px; border-radius: 14px; border: 1px solid rgba(255, 255, 255, 0.05); }
+    .metric-val { font-size: 18px; font-weight: 700; color: #fff; margin-top: 4px; }
+    .progress-bg { height: 8px; background: rgba(255, 255, 255, 0.1); border-radius: 10px; overflow: hidden; margin-top: 10px; }
+    .progress-fill { height: 100%; border-radius: 10px; transition: width 0.5s ease; }
+    .btn { display: block; width: 100%; background: linear-gradient(135deg, #2563eb, #1d4ed8); color: #fff; text-align: center; padding: 14px; border-radius: 16px; text-decoration: none; font-weight: 700; border: none; font-size: 15px; cursor: pointer; margin-top: 10px; box-shadow: 0 4px 20px rgba(37, 99, 235, 0.3); }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="logo">⚡ OrbitLife</div>
+    <div class="badge">● LIVE SYNC</div>
+  </div>
+
+  <div class="card" style="background: linear-gradient(135deg, rgba(30, 58, 138, 0.3), rgba(15, 23, 42, 0.6)); border-color: rgba(96, 165, 250, 0.2);">
+    <div class="title">Safe Daily Spending Limit</div>
+    <div class="amount" id="dailyLimit">₹700<span style="font-size: 14px; color: var(--text-muted); font-weight: 500;"> / day</span></div>
+    <div class="progress-bg"><div class="progress-fill" style="width: 15%; background: #10b981;"></div></div>
+    <div style="display: flex; justify-content: space-between; font-size: 12px; color: var(--text-muted); margin-top: 6px;">
+      <span>Spent Today: ₹0</span>
+      <span>Safe Left: ₹700</span>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="title">💳 Supermoney Secured Credit Card</div>
+    <div class="amount" id="cardAvail">₹16,713.80<span style="font-size: 14px; color: #10b981; font-weight: 600;"> Available</span></div>
+    <div class="grid">
+      <div class="metric">
+        <div class="title">Used Credit</div>
+        <div class="metric-val" style="color: #f59e0b;">₹10,000</div>
+      </div>
+      <div class="metric">
+        <div class="title">Total Limit</div>
+        <div class="metric-val">₹26,713.80</div>
+      </div>
+    </div>
+    <div class="progress-bg"><div class="progress-fill" style="width: 37.4%; background: #f59e0b;"></div></div>
+    <div style="font-size: 12px; color: var(--text-muted); margin-top: 8px; text-align: right;">37.4% Utilization • Statement on 1st</div>
+  </div>
+
+  <div class="card">
+    <div class="title">🏦 Liquid Balances</div>
+    <div class="grid">
+      <div class="metric"><div class="title">HDFC Bank</div><div class="metric-val">₹1,044.69</div></div>
+      <div class="metric"><div class="title">SBI Bank</div><div class="metric-val">₹16.31</div></div>
+    </div>
+  </div>
+
+  <button class="btn" onclick="window.Telegram.WebApp.close()">Done & Return to Chat</button>
+
+  <script>
+    if (window.Telegram && window.Telegram.WebApp) {
+      window.Telegram.WebApp.ready();
+      window.Telegram.WebApp.expand();
+    }
+  </script>
+</body>
+</html>`;
 
 // Vercel Serverless Function Handler
 module.exports = async (req, res) => {
@@ -514,5 +645,7 @@ module.exports = async (req, res) => {
       return res.status(500).send("Error");
     }
   }
-  return res.status(200).send("OrbitLife Full Automation Bot Webhook is ACTIVE 🚀");
+  // If user opens the Web App in browser/Telegram Mini App:
+  res.setHeader("Content-Type", "text/html");
+  return res.status(200).send(WEB_DASHBOARD_HTML);
 };
