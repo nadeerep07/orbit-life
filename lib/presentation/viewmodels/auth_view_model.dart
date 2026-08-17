@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import '../../core/services/cloud_sync_service.dart';
 
 class AppUser {
   final String id;
@@ -59,6 +60,10 @@ class AuthViewModel extends ChangeNotifier {
           if (user != null) {
             _currentUser = AppUser.fromFirebaseUser(user);
             _syncUserProfileToFirestore(user);
+            CloudSyncService.startLiveSync(user.uid);
+          } else {
+            _currentUser = null;
+            CloudSyncService.stopLiveSync();
           }
           if (hasListeners) notifyListeners();
         },

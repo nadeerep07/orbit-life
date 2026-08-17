@@ -105,9 +105,123 @@ class CloudSyncService {
         statements: statementsJson,
         cashbacks: cashbacksJson,
       );
-      debugPrint("CloudSyncService: Auto-sync completed.");
+      debugPrint("CloudSyncService: Local -> Cloud Auto-sync completed.");
     } catch (e) {
       debugPrint("CloudSyncService error: $e");
+    }
+  }
+
+  static StreamSubscription<DocumentSnapshot>? _remoteSubscription;
+
+  /// Start Real-Time Live Sync from Firestore to Mobile App
+  static void startLiveSync(String userId) {
+    _remoteSubscription?.cancel();
+    _remoteSubscription = FirebaseFirestore.instance
+        .collection('users')
+        .doc(userId)
+        .snapshots()
+        .listen((snapshot) async {
+      if (!snapshot.exists || snapshot.data() == null) return;
+      final data = snapshot.data() as Map<String, dynamic>;
+      await applyRemoteDataToHive(data);
+    }, onError: (err) {
+      debugPrint("CloudSyncService live sync error: $err");
+    });
+    debugPrint("CloudSyncService: Real-Time Live Sync active for user: $userId");
+  }
+
+  static void stopLiveSync() {
+    _remoteSubscription?.cancel();
+    _remoteSubscription = null;
+  }
+
+  /// Apply incoming Firestore updates into Hive boxes
+  static Future<void> applyRemoteDataToHive(Map<String, dynamic> data) async {
+    isSyncPaused = true;
+    try {
+      if (data['categories'] != null) {
+        final box = await Hive.openBox<CategoryModel>('categories');
+        await box.clear();
+        for (var item in (data['categories'] as List)) {
+          final cat = CategoryModel.fromJson(Map<String, dynamic>.from(item));
+          await box.put(cat.id, cat);
+        }
+      }
+
+      if (data['expenses'] != null) {
+        final box = await Hive.openBox<ExpenseModel>('expenses');
+        await box.clear();
+        for (var item in (data['expenses'] as List)) {
+          final exp = ExpenseModel.fromJson(Map<String, dynamic>.from(item));
+          await box.put(exp.id, exp);
+        }
+      }
+
+      if (data['accounts'] != null) {
+        final box = await Hive.openBox<AccountModel>('accounts');
+        await box.clear();
+        for (var item in (data['accounts'] as List)) {
+          final acc = AccountModel.fromJson(Map<String, dynamic>.from(item));
+          await box.put(acc.id, acc);
+        }
+      }
+
+      if (data['incomes'] != null) {
+        final box = await Hive.openBox<IncomeModel>('incomeBox');
+        await box.clear();
+        for (var item in (data['incomes'] as List)) {
+          final inc = IncomeModel.fromJson(Map<String, dynamic>.from(item));
+          await box.put(inc.id, inc);
+        }
+      }
+
+      if (data['borrowLends'] != null) {
+        final box = await Hive.openBox<BorrowLendModel>('borrowLendBox');
+        await box.clear();
+        for (var item in (data['borrowLends'] as List)) {
+          final bl = BorrowLendModel.fromJson(Map<String, dynamic>.from(item));
+          await box.put(bl.id, bl);
+        }
+      }
+
+      if (data['emis'] != null) {
+        final box = await Hive.openBox<EmiTrackerModel>('emiTrackerBox');
+        await box.clear();
+        for (var item in (data['emis'] as List)) {
+          final emi = EmiTrackerModel.fromJson(Map<String, dynamic>.from(item));
+          await box.put(emi.id, emi);
+        }
+      }
+
+      if (data['creditCardAccount'] != null) {
+        final box = await Hive.openBox<CreditCardAccountModel>('credit_card_account_box');
+        await box.clear();
+        final cc = CreditCardAccountModel.fromJson(Map<String, dynamic>.from(data['creditCardAccount']));
+        await box.put('supermoney_account', cc);
+      }
+
+      if (data['fdLots'] != null) {
+        final box = await Hive.openBox<FdLotModel>('fd_lots_box');
+        await box.clear();
+        for (var item in (data['fdLots'] as List)) {
+          final fd = FdLotModel.fromJson(Map<String, dynamic>.from(item));
+          await box.put(fd.id, fd);
+        }
+      }
+
+      if (data['transactions'] != null) {
+        final box = await Hive.openBox<TransactionModel>('transactions_box');
+        await box.clear();
+        for (var item in (data['transactions'] as List)) {
+          final tx = TransactionModel.fromJson(Map<String, dynamic>.from(item));
+          await box.put(tx.id, tx);
+        }
+      }
+      debugPrint("CloudSyncService: Real-Time updates successfully applied to Hive!");
+    } catch (e) {
+      debugPrint("CloudSyncService applyRemoteDataToHive error: $e");
+    } finally {
+      isSyncPaused = false;
     }
   }
 }
