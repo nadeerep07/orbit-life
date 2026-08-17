@@ -36,7 +36,7 @@ const mainMenu = Markup.keyboard([
   ["📊 Today's Stats", "🎯 Daily Scorecard"],
   ["🏦 Live Balances", "💳 Supermoney Card"],
   ["📑 Active EMIs", "🤝 Borrow & Lend"],
-  [Markup.button.webApp("🌐 Open Web Dashboard", WEB_APP_URL)],
+
 ]).resize();
 
 // Inline Action Chips
@@ -289,19 +289,44 @@ async function handleEmisQuery(ctx) {
     }
 
     let totalMonthly = 0;
-    let reply = `📑 *Active EMIs & Loans*\n\n`;
+    let totalPendingDebt = 0;
+    let totalPaidDebt = 0;
+    let reply = `📑 *ORBITLIFE ACTIVE EMIs & LOAN TRACKER*\n` +
+      `━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
+
+    const emiButtons = [];
 
     for (const emi of data.emis) {
       totalMonthly += emi.monthlyEmi;
+      totalPendingDebt += emi.pendingAmount;
+      totalPaidDebt += emi.paidAmount;
+
+      const progressPercent = emi.totalAmount > 0 ? Math.round((emi.paidAmount / emi.totalAmount) * 100) : 0;
+
       reply += `📌 *${emi.title}*\n` +
-        `• Monthly EMI: ₹${emi.monthlyEmi.toLocaleString("en-IN", { minimumFractionDigits: 2 })}\n` +
-        `• Remaining Months: ${emi.remainingMonths}\n\n`;
+        `• 💵 *Monthly EMI:* ₹${emi.monthlyEmi.toLocaleString("en-IN", { minimumFractionDigits: 2 })} / month\n` +
+        `• ⏳ *Tenure Left:* *${emi.remainingMonths} months* (out of ${emi.totalMonths})\n` +
+        `• 💰 *Total Pending:* ₹${emi.pendingAmount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}\n` +
+        `• 📊 *Progress:* ${progressPercent}% paid (₹${emi.paidAmount.toLocaleString("en-IN")} / ₹${emi.totalAmount.toLocaleString("en-IN")})\n\n`;
+
+      if (!emi.isPaid) {
+        emiButtons.push([
+          Markup.button.callback(`✅ Pay ${emi.title} (₹${emi.monthlyEmi.toLocaleString("en-IN")})`, `pay_emi_${emi.title}`),
+        ]);
+      }
     }
 
-    reply += `💸 *Total Monthly EMI Burden:* ₹${totalMonthly.toLocaleString("en-IN", { minimumFractionDigits: 2 })}\n\n` +
-      `💡 _To mark an EMI paid, send:_ "Paid ${data.emis[0]?.title || "EMI"}"`;
+    reply += `━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+      `💸 *Total Monthly EMI Burden:* *₹${totalMonthly.toLocaleString("en-IN", { minimumFractionDigits: 2 })} / month*\n` +
+      `🏦 *Total Outstanding Debt:* *₹${totalPendingDebt.toLocaleString("en-IN", { minimumFractionDigits: 2 })}*\n\n` +
+      `💡 _Tap any button below to record this month's payment:_`;
 
-    await ctx.reply(reply, { parse_mode: "Markdown", ...mainMenu });
+    emiButtons.push([
+      Markup.button.callback("🏦 View Balance", "quick_balance"),
+      Markup.button.callback("🎯 Scorecard", "quick_scorecard"),
+    ]);
+
+    await ctx.reply(reply, { parse_mode: "Markdown", ...Markup.inlineKeyboard(emiButtons) });
   } catch (err) {
     await ctx.reply(`❌ Error: ${err.message}`);
   }
@@ -355,6 +380,27 @@ bot.action("quick_card", async (ctx) => {
 bot.action("quick_emis", async (ctx) => {
   await ctx.answerCbQuery();
   return handleEmisQuery(ctx);
+});
+
+bot.action(/^pay_emi_(.+)$/, async (ctx) => {
+  await ctx.answerCbQuery();
+  const emiName = ctx.match[1];
+  const chatId = ctx.chat.id;
+  const userId = await getUserIdByChatId(chatId);
+  if (!userId) return ctx.reply("⚠️ Link account first.");
+
+  try {
+    const res = await payEmi(userId, { emiName });
+    const reply = `✅ *EMI Payment Recorded!*\n\n` +
+      `📌 *Loan:* ${res.emiTitle}\n` +
+      `💰 *Amount Deducted:* ₹${res.amountPaid.toLocaleString("en-IN", { minimumFractionDigits: 2 })}\n` +
+      `📅 *Tenure Progress:* ${res.paidMonths} months paid\n` +
+      `⏳ *Remaining:* *${res.remainingMonths} months left*\n\n` +
+      `_Deduction synced to your OrbitLife App in real time!_`;
+    return ctx.reply(reply, { parse_mode: "Markdown", ...postActionChips });
+  } catch (err) {
+    return ctx.reply(`❌ *Payment Error:* ${err.message}`);
+  }
 });
 
 // ─── PHOTO HANDLER ──────────────────────────────────────────────────────────

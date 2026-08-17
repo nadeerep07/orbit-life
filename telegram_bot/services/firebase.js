@@ -657,12 +657,28 @@ async function getEmisAndDebts(userId) {
   const userData = await getUserData(userId);
   if (!userData) return null;
 
-  const emis = (userData.emis || []).map((e) => ({
-    title: e.title || e.loanName || "Loan",
-    monthlyEmi: Number(e.monthlyEmi || e.amount || 0),
-    remainingMonths: Number(e.remainingMonths || e.totalMonths || 0),
-    totalAmount: Number(e.totalAmount || 0),
-  }));
+  const emis = (userData.emis || []).map((e) => {
+    const monthlyEmi = Number(e.monthlyEmi || e.amount || 0);
+    const paidMonths = Number(e.paidMonths || 0);
+    const totalMonths = Number(e.totalMonths || e.remainingMonths || 12);
+    const remainingMonths = e.remainingMonths !== undefined ? Number(e.remainingMonths) : Math.max(0, totalMonths - paidMonths);
+    const totalAmount = Number(e.totalAmount || (monthlyEmi * totalMonths));
+    const pendingAmount = monthlyEmi * remainingMonths;
+    const paidAmount = Math.max(0, totalAmount - pendingAmount);
+
+    return {
+      id: e.id,
+      title: e.title || e.loanName || "Loan",
+      monthlyEmi,
+      paidMonths,
+      totalMonths,
+      remainingMonths,
+      totalAmount,
+      pendingAmount,
+      paidAmount,
+      isPaid: remainingMonths === 0,
+    };
+  });
 
   const borrowLends = (userData.borrowLends || []).filter((b) => !b.isSettled && b.status !== "settled").map((b) => ({
     personName: b.personName || "Person",
