@@ -517,15 +517,6 @@ class _AddIncomeSheetState extends State<_AddIncomeSheet> {
                   ),
                 ],
               ),
-              items: _sources.map((s) {
-                return DropdownMenuItem(
-                  value: s,
-                  child: Text(s, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
-                );
-              }).toList(),
-              onChanged: (val) {
-                if (val != null) setState(() => _selectedSource = val);
-              },
             ),
 
             // ── Quick Amount Shortcut Pills ────────────────────────────────────

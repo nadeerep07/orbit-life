@@ -487,26 +487,12 @@ class _GoalsScreenState extends State<GoalsScreen> {
                 children: [
                   Center(
                     child: Container(
-                      width: 48, height: 4,
+                      width: 48,
+                      height: 4,
                       decoration: BoxDecoration(
                         color: isDarkMode ? Colors.white24 : Colors.black12,
                         borderRadius: BorderRadius.circular(2),
                       ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 24),
-                TextField(
-                  controller: ctrl,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  decoration: InputDecoration(
-                    labelText: 'Amount ($currencySymbol)',
-                    prefixIcon: const Icon(Icons.monetization_on_outlined),
-                    border: inputBorder,
-                    enabledBorder: inputBorder,
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(14),
-                      borderSide: BorderSide(color: theme.colorScheme.primary, width: 1.5),
                     ),
                   ),
                   const SizedBox(height: 18),

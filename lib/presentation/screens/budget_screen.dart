@@ -378,8 +378,6 @@ class BudgetScreen extends StatelessWidget {
                         borderRadius: BorderRadius.circular(2),
                       ),
                     ),
-                    borderRadius: BorderRadius.circular(24),
-                    border: Border.all(color: borderColor),
                   ),
                   const SizedBox(height: 18),
                   Row(
