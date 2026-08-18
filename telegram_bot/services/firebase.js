@@ -605,6 +605,160 @@ async function payCreditCardBill(userId, { amount, accountName }) {
 }
 
 /**
+ * Create or add a new account (e.g. Cash in Hand)
+ */
+async function addAccount(userId, { name, balance = 0 }) {
+  const firestore = getDb();
+  const userRef = firestore.collection("users").doc(userId);
+  const userData = await getUserData(userId);
+
+  const accounts = (userData && userData.accounts) || [];
+  const existing = accounts.find(
+    (a) => a.name && a.name.toLowerCase() === name.toLowerCase().trim()
+  );
+
+  if (existing) {
+    const updatedAccounts = accounts.map((a) =>
+      a.id === existing.id ? { ...a, openingBalance: Number(balance) } : a
+    );
+    await userRef.set(
+      {
+        accounts: updatedAccounts,
+        lastBackup: admin.firestore.FieldValue.serverTimestamp(),
+      },
+      { merge: true }
+    );
+    return { id: existing.id, name: existing.name, balance: Number(balance), isNew: false };
+  }
+
+  const newAccount = {
+    id: uuidv4(),
+    name: name.trim(),
+    openingBalance: Number(balance) || 0,
+  };
+
+  await userRef.set(
+    {
+      accounts: [...accounts, newAccount],
+      lastBackup: admin.firestore.FieldValue.serverTimestamp(),
+    },
+    { merge: true }
+  );
+
+  return { id: newAccount.id, name: newAccount.name, balance: newAccount.openingBalance, isNew: true };
+}
+
+/**
+ * Transfer funds between accounts (e.g. SBI -> HDFC, or SBI -> Cash in Hand)
+ */
+async function logTransfer(userId, { amount, fromAccount, toAccount, date, notes }) {
+  const firestore = getDb();
+  const userRef = firestore.collection("users").doc(userId);
+  const userData = await getUserData(userId);
+
+  if (!userData) throw new Error("User profile not found. Please link your account.");
+
+  let accounts = [...(userData.accounts || [])];
+  const transferAmount = Number(amount);
+  if (!transferAmount || transferAmount <= 0) {
+    throw new Error("Please specify a valid transfer amount greater than 0.");
+  }
+
+  // Resolve source account
+  let fromAcc = accounts.find(
+    (a) => a.name && a.name.toLowerCase().includes(fromAccount.toLowerCase().trim())
+  );
+  if (!fromAcc && accounts.length > 0) {
+    fromAcc = accounts.find(
+      (a) => fromAccount.toLowerCase().includes(a.name.toLowerCase())
+    );
+  }
+
+  if (!fromAcc) {
+    const existingNames = accounts.map((a) => a.name).join(", ");
+    throw new Error(`Source account "${fromAccount}" not found. Available accounts: ${existingNames || "None"}`);
+  }
+
+  // Resolve target account
+  let toAcc = accounts.find(
+    (a) => a.name && a.name.toLowerCase().includes(toAccount.toLowerCase().trim())
+  );
+  if (!toAcc && accounts.length > 0) {
+    toAcc = accounts.find(
+      (a) => toAccount.toLowerCase().includes(a.name.toLowerCase())
+    );
+  }
+
+  // Auto-create target if it's Cash / Cash in Hand and not found
+  if (!toAcc) {
+    const isCash = /cash/i.test(toAccount);
+    const targetName = isCash ? "Cash in Hand" : toAccount.trim();
+    const created = {
+      id: uuidv4(),
+      name: targetName,
+      openingBalance: 0,
+    };
+    accounts.push(created);
+    toAcc = created;
+  }
+
+  if (fromAcc.id === toAcc.id) {
+    throw new Error("Source and destination accounts cannot be the same.");
+  }
+
+  const fromNewBalance = (Number(fromAcc.openingBalance) || 0) - transferAmount;
+  const toNewBalance = (Number(toAcc.openingBalance) || 0) + transferAmount;
+
+  const updatedAccounts = accounts.map((a) => {
+    if (a.id === fromAcc.id) return { ...a, openingBalance: fromNewBalance };
+    if (a.id === toAcc.id) return { ...a, openingBalance: toNewBalance };
+    return a;
+  });
+
+  const entryDate = date ? new Date(date) : new Date();
+  const txId = uuidv4();
+
+  const newTx = {
+    id: txId,
+    amount: transferAmount,
+    type: "transfer",
+    accountId: fromAcc.id,
+    targetAccountId: toAcc.id,
+    categoryOrSource: "Account Transfer",
+    date: entryDate.toISOString(),
+    description: notes || `Transfer from ${fromAcc.name} to ${toAcc.name}`,
+    referenceId: "telegram_transfer",
+  };
+
+  const newTransfer = {
+    id: uuidv4(),
+    amount: transferAmount,
+    fromAccount: fromAcc.name,
+    toAccount: toAcc.name,
+    date: entryDate.toISOString(),
+    notes: notes || `Transfer from ${fromAcc.name} to ${toAcc.name}`,
+  };
+
+  await userRef.set(
+    {
+      accounts: updatedAccounts,
+      transactions: [...(userData.transactions || []), newTx],
+      transfers: [...(userData.transfers || []), newTransfer],
+      lastBackup: admin.firestore.FieldValue.serverTimestamp(),
+    },
+    { merge: true }
+  );
+
+  return {
+    fromAccountName: fromAcc.name,
+    toAccountName: toAcc.name,
+    fromNewBalance,
+    toNewBalance,
+    amount: transferAmount,
+  };
+}
+
+/**
  * Get Balances & Net Worth
  */
 async function getBalances(userId) {
@@ -936,4 +1090,6 @@ module.exports = {
   getEmisAndDebts,
   saveOnboardingProfile,
   getSummary,
+  addAccount,
+  logTransfer,
 }

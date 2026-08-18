@@ -196,10 +196,24 @@ class OnboardingBloc extends Bloc<OnboardingEvent, OnboardingState> {
     Emitter<OnboardingState> emit,
   ) async {
     final activeSteps = state.activeSteps;
+    if (activeSteps.isEmpty) return;
+
     final currentStep = state.draft.currentStep;
     final currentIdx = activeSteps.indexOf(currentStep);
 
-    if (currentIdx != -1 && currentIdx < activeSteps.length - 1) {
+    if (currentIdx == -1) {
+      // Find the next active step that comes after currentStep
+      final nextStepVal = activeSteps.firstWhere(
+        (s) => s > currentStep,
+        orElse: () => activeSteps.last,
+      );
+      final updatedDraft = state.draft.copyWith(currentStep: nextStepVal);
+      await repository.saveDraft(updatedDraft);
+      _recalculateState(emit, updatedDraft);
+      return;
+    }
+
+    if (currentIdx < activeSteps.length - 1) {
       final nextStepVal = activeSteps[currentIdx + 1];
       final updatedDraft = state.draft.copyWith(currentStep: nextStepVal);
       await repository.saveDraft(updatedDraft);
@@ -212,8 +226,22 @@ class OnboardingBloc extends Bloc<OnboardingEvent, OnboardingState> {
     Emitter<OnboardingState> emit,
   ) async {
     final activeSteps = state.activeSteps;
+    if (activeSteps.isEmpty) return;
+
     final currentStep = state.draft.currentStep;
     final currentIdx = activeSteps.indexOf(currentStep);
+
+    if (currentIdx == -1) {
+      // Find the previous active step that comes before currentStep
+      final prevStepVal = activeSteps.lastWhere(
+        (s) => s < currentStep,
+        orElse: () => activeSteps.first,
+      );
+      final updatedDraft = state.draft.copyWith(currentStep: prevStepVal);
+      await repository.saveDraft(updatedDraft);
+      _recalculateState(emit, updatedDraft);
+      return;
+    }
 
     if (currentIdx > 0) {
       final prevStepVal = activeSteps[currentIdx - 1];

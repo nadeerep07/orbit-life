@@ -14,6 +14,7 @@ abstract class CreditCardRepository {
     required DateTime depositDate,
     required String remarks,
     String? sourceAccountId,
+    bool increaseCreditLimit = true,
   });
 
   Future<void> withdrawFd(String fdId);

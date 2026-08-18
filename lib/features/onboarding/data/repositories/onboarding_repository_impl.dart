@@ -261,11 +261,13 @@ class OnboardingRepositoryImpl implements OnboardingRepository {
 
     // 3. Commit FD Lots (Marked as MigrationLot = true & ImportedHistoricalFD = true)
     if (draft.startingChoice == 'full' && draft.hasCreditCards && draft.fdLots.isNotEmpty) {
+      final hasExplicitCard = draft.creditCard != null;
       for (var lot in draft.fdLots) {
         await creditCardRepository.depositFd(
           amount: lot.principal,
           depositDate: lot.depositDate,
           remarks: '${lot.bank.isNotEmpty ? "${lot.bank} - " : ""}${lot.remarks} [ImportedHistoricalFD]',
+          increaseCreditLimit: !hasExplicitCard,
         );
       }
     }
@@ -341,12 +343,13 @@ class OnboardingRepositoryImpl implements OnboardingRepository {
       await categoryRepository.addCategory(category);
     }
 
-    // 10. Update Monthly Budget Limit in Settings to match user's real setup calculation
+    // 10. Update Monthly Budget Limit & Savings Target in Settings to match user's real setup calculation
     if (settingsRepository != null) {
       try {
         final currentSettings = await settingsRepository!.getSettings();
         final updatedSettings = currentSettings.copyWith(
           monthlyBudgetLimit: smartBudget.totalRecommendedBudget,
+          savingsGoal: draft.targetMonthlySavings > 0 ? draft.targetMonthlySavings : currentSettings.savingsGoal,
         );
         await settingsRepository!.saveSettings(updatedSettings);
       } catch (_) {}

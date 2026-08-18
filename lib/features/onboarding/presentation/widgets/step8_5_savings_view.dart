@@ -46,10 +46,33 @@ class _StepSavingsViewState extends State<StepSavingsView> {
         ? widget.draft!.targetMonthlySavings
         : _totalMonthlySavingsOutflow;
     _targetSavingsCtrl = TextEditingController(text: initialTarget > 0 ? initialTarget.toStringAsFixed(0) : '');
+    _targetSavingsCtrl.addListener(_onControllerChanged);
+  }
+
+  void _onControllerChanged() {
+    final val = double.tryParse(_targetSavingsCtrl.text.trim()) ?? 0.0;
+    if (widget.onTargetSavingsChanged != null) {
+      widget.onTargetSavingsChanged!(val);
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant StepSavingsView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.draft?.targetMonthlySavings != null &&
+        widget.draft!.targetMonthlySavings != oldWidget.draft?.targetMonthlySavings) {
+      final currentParsed = double.tryParse(_targetSavingsCtrl.text.trim()) ?? 0.0;
+      if (currentParsed != widget.draft!.targetMonthlySavings) {
+        _targetSavingsCtrl.text = widget.draft!.targetMonthlySavings > 0
+            ? widget.draft!.targetMonthlySavings.toStringAsFixed(0)
+            : '';
+      }
+    }
   }
 
   @override
   void dispose() {
+    _targetSavingsCtrl.removeListener(_onControllerChanged);
     _targetSavingsCtrl.dispose();
     super.dispose();
   }

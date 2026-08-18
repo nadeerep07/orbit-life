@@ -83,6 +83,7 @@ class CreditCardRepositoryImpl implements CreditCardRepository {
     required DateTime depositDate,
     required String remarks,
     String? sourceAccountId,
+    bool increaseCreditLimit = true,
   }) async {
     final fdId = 'fd_${_uuid.v4()}';
     final lockUntil = depositDate.add(const Duration(days: 7));
@@ -104,15 +105,17 @@ class CreditCardRepositoryImpl implements CreditCardRepository {
     // Save FD lot
     await localDataSource.addFdLot(FdLotModel.fromEntity(newLot));
 
-    // Increase Credit Limit by 90% of principal
-    final creditIncrease = amount * 0.90;
-    final account = await getCreditCardAccount();
-    final updatedAccount = account.copyWith(
-      creditLimit: account.creditLimit + creditIncrease,
-      availableCredit: account.availableCredit + creditIncrease,
-      lastUpdated: DateTime.now(),
-    );
-    await saveCreditCardAccount(updatedAccount);
+    // Increase Credit Limit by 90% of principal if requested
+    if (increaseCreditLimit) {
+      final creditIncrease = amount * 0.90;
+      final account = await getCreditCardAccount();
+      final updatedAccount = account.copyWith(
+        creditLimit: account.creditLimit + creditIncrease,
+        availableCredit: account.availableCredit + creditIncrease,
+        lastUpdated: DateTime.now(),
+      );
+      await saveCreditCardAccount(updatedAccount);
+    }
 
     // Log funding transfer in Unified Ledger if source bank account is provided
     if (sourceAccountId != null && sourceAccountId.isNotEmpty) {

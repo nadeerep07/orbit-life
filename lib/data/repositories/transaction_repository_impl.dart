@@ -36,18 +36,30 @@ class TransactionRepositoryImpl implements TransactionRepository {
   Future<void> addTransaction(TransactionEntity transaction) async {
     final model = TransactionModel.fromEntity(transaction);
     await localDataSource.addTransaction(model);
+    await _applyCreditCardTransaction(transaction, isReversal: false);
     await recalculateBalances();
   }
 
   @override
   Future<void> updateTransaction(TransactionEntity transaction) async {
+    final models = await localDataSource.getTransactions();
+    final existing = models.where((m) => m.id == transaction.id).firstOrNull;
+    if (existing != null) {
+      await _applyCreditCardTransaction(existing.toEntity(), isReversal: true);
+    }
     final model = TransactionModel.fromEntity(transaction);
     await localDataSource.addTransaction(model); // Put overwrites in Hive
+    await _applyCreditCardTransaction(transaction, isReversal: false);
     await recalculateBalances();
   }
 
   @override
   Future<void> deleteTransaction(String transactionId) async {
+    final models = await localDataSource.getTransactions();
+    final toDelete = models.where((m) => m.id == transactionId).firstOrNull;
+    if (toDelete != null) {
+      await _applyCreditCardTransaction(toDelete.toEntity(), isReversal: true);
+    }
     await localDataSource.deleteTransaction(transactionId);
     await recalculateBalances();
   }
@@ -57,9 +69,66 @@ class TransactionRepositoryImpl implements TransactionRepository {
     final models = await localDataSource.getTransactions();
     final toDelete = models.where((m) => m.referenceId == referenceId).toList();
     for (var m in toDelete) {
+      await _applyCreditCardTransaction(m.toEntity(), isReversal: true);
       await localDataSource.deleteTransaction(m.id);
     }
     await recalculateBalances();
+  }
+
+  Future<void> _applyCreditCardTransaction(TransactionEntity tx, {required bool isReversal}) async {
+    if (creditCardLocalDataSource == null) return;
+    final cc = await creditCardLocalDataSource!.getCreditCardAccount();
+    if (cc == null) return;
+
+    double delta = 0.0;
+    if (tx.accountId == cc.id) {
+      if (tx.type == TransactionType.income || tx.type == TransactionType.borrow) {
+        delta -= tx.amount;
+      } else {
+        delta += tx.amount;
+      }
+    }
+    if (tx.targetAccountId == cc.id) {
+      if (tx.type == TransactionType.transfer ||
+          tx.type == TransactionType.savings ||
+          tx.type == TransactionType.income) {
+        delta -= tx.amount;
+      }
+    }
+
+    if (delta == 0.0) return;
+    if (isReversal) delta = -delta;
+
+    final usedCredit = (cc.usedCredit + delta).clamp(0.0, cc.creditLimit);
+    final availableCredit = (cc.creditLimit - usedCredit).clamp(0.0, cc.creditLimit);
+
+    final updatedCc = CreditCardAccountModel(
+      id: cc.id,
+      name: cc.name,
+      creditLimit: cc.creditLimit,
+      availableCredit: availableCredit,
+      usedCredit: usedCredit,
+      cashbackPending: cc.cashbackPending,
+      cashbackAvailable: cc.cashbackAvailable,
+      cashbackRedeemed: cc.cashbackRedeemed,
+      lifetimeCashback: cc.lifetimeCashback,
+      statementDateDay: cc.statementDateDay,
+      dueDateDay: cc.dueDateDay,
+      initialCreditMigrated: cc.initialCreditMigrated,
+      lastUpdated: DateTime.now(),
+    );
+    await creditCardLocalDataSource!.saveCreditCardAccount(updatedCc);
+
+    final accounts = await localDataSource.getAccounts();
+    final superMoneyAcc = accounts.where((a) => a.id == cc.id).firstOrNull;
+    if (superMoneyAcc != null) {
+      final updatedSuperMoney = AccountModel(
+        id: superMoneyAcc.id,
+        name: superMoneyAcc.name,
+        openingBalance: availableCredit,
+      );
+      await localDataSource.updateAccount(updatedSuperMoney);
+    }
   }
 
   @override
@@ -70,12 +139,11 @@ class TransactionRepositoryImpl implements TransactionRepository {
 
     // 2. Compute dynamic balances for accounts
     for (var acc in accounts) {
-      if (acc.id == 'supermoney') continue; // Credit card balance handled separately below
+      if (acc.id == 'supermoney') continue; // Credit card balance handled separately
 
       double balance = 0.0;
       for (var tx in transactions) {
         if (tx.accountId == acc.id) {
-          // Money leaving account (Debit) or coming in as Income/Borrow (Credit)
           if (tx.type == TransactionType.income ||
               tx.type == TransactionType.borrow) {
             balance += tx.amount;
@@ -84,7 +152,6 @@ class TransactionRepositoryImpl implements TransactionRepository {
           }
         }
         if (tx.targetAccountId == acc.id) {
-          // Money coming into account from a transfer (Credit)
           if (tx.type == TransactionType.transfer ||
               tx.type == TransactionType.savings) {
             balance += tx.amount;
@@ -92,7 +159,6 @@ class TransactionRepositoryImpl implements TransactionRepository {
         }
       }
 
-      // Update the account balance
       final updatedAcc = AccountModel(
         id: acc.id,
         name: acc.name,
@@ -101,55 +167,16 @@ class TransactionRepositoryImpl implements TransactionRepository {
       await localDataSource.updateAccount(updatedAcc);
     }
 
-    // 3. Compute dynamic balances for Credit Card account if present
+    // 3. Ensure Credit Card account representation matches available credit
     if (creditCardLocalDataSource != null) {
       final ccAccountModel = await creditCardLocalDataSource!.getCreditCardAccount();
       if (ccAccountModel != null) {
-        double netTxUsage = 0.0;
-        for (var tx in transactions) {
-          if (tx.accountId == ccAccountModel.id) {
-            if (tx.type == TransactionType.income || tx.type == TransactionType.borrow) {
-              netTxUsage -= tx.amount;
-            } else {
-              netTxUsage += tx.amount;
-            }
-          }
-          if (tx.targetAccountId == ccAccountModel.id) {
-            if (tx.type == TransactionType.transfer ||
-                tx.type == TransactionType.savings ||
-                tx.type == TransactionType.income) {
-              netTxUsage -= tx.amount;
-            }
-          }
-        }
-
-        final double usedCredit = (ccAccountModel.usedCredit + netTxUsage).clamp(0.0, ccAccountModel.creditLimit);
-        final double availableCredit = (ccAccountModel.creditLimit - usedCredit).clamp(0.0, ccAccountModel.creditLimit);
-
-        final updatedCcModel = CreditCardAccountModel(
-          id: ccAccountModel.id,
-          name: ccAccountModel.name,
-          creditLimit: ccAccountModel.creditLimit,
-          availableCredit: availableCredit,
-          usedCredit: usedCredit,
-          cashbackPending: ccAccountModel.cashbackPending,
-          cashbackAvailable: ccAccountModel.cashbackAvailable,
-          cashbackRedeemed: ccAccountModel.cashbackRedeemed,
-          lifetimeCashback: ccAccountModel.lifetimeCashback,
-          statementDateDay: ccAccountModel.statementDateDay,
-          dueDateDay: ccAccountModel.dueDateDay,
-          initialCreditMigrated: ccAccountModel.initialCreditMigrated,
-          lastUpdated: DateTime.now(),
-        );
-        await creditCardLocalDataSource!.saveCreditCardAccount(updatedCcModel);
-
-        // Update AccountModel for supermoney so openingBalance represents availableCredit
         final superMoneyAcc = accounts.where((a) => a.id == ccAccountModel.id).firstOrNull;
-        if (superMoneyAcc != null) {
+        if (superMoneyAcc != null && superMoneyAcc.openingBalance != ccAccountModel.availableCredit) {
           final updatedSuperMoney = AccountModel(
             id: superMoneyAcc.id,
             name: superMoneyAcc.name,
-            openingBalance: availableCredit,
+            openingBalance: ccAccountModel.availableCredit,
           );
           await localDataSource.updateAccount(updatedSuperMoney);
         }

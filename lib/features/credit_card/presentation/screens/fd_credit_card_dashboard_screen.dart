@@ -6,6 +6,7 @@ import '../blocs/fd_lots_bloc.dart';
 import '../blocs/statement_bloc.dart';
 import '../blocs/cashback_bloc.dart';
 import '../../domain/entities/credit_card_account_entity.dart';
+import '../../domain/entities/fd_lot_entity.dart';
 import '../widgets/credit_gauge_card.dart';
 import '../widgets/outstanding_due_card.dart';
 import '../widgets/fd_portfolio_summary_card.dart';
@@ -158,6 +159,187 @@ class _FdCreditCardDashboardScreenState extends State<FdCreditCardDashboardScree
     );
   }
 
+  void _showEditCardModal(BuildContext context, CreditCardAccountEntity account) {
+    final fdState = context.read<FdLotsBloc>().state;
+    final totalFd = (fdState is FdLotsLoadedState)
+        ? fdState.lots.where((l) => l.status != FdStatus.withdrawn).fold<double>(0.0, (s, l) => s + (l.currentValue > 0 ? l.currentValue : l.principal))
+        : 0.0;
+    final recommendedLimit = (totalFd * 0.90).roundToDouble();
+
+    final nameCtrl = TextEditingController(text: account.name);
+    final limitCtrl = TextEditingController(text: account.creditLimit.toStringAsFixed(0));
+    final usedCtrl = TextEditingController(text: account.usedCredit.toStringAsFixed(0));
+    final stmtCtrl = TextEditingController(text: account.statementDateDay.toString());
+    final dueCtrl = TextEditingController(text: account.dueDateDay.toString());
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setModalState) {
+            return Padding(
+              padding: EdgeInsets.only(
+                left: 20,
+                right: 20,
+                top: 20,
+                bottom: MediaQuery.of(ctx).viewInsets.bottom + 20,
+              ),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text('Card Settings & Limit Reconcile', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                        IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(ctx)),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    if (totalFd > 0)
+                      Container(
+                        margin: const EdgeInsets.only(bottom: 16),
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: Colors.amberAccent.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: Colors.amberAccent.withValues(alpha: 0.3)),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                const Text('Active FD Backing:', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                                Text('$currencySymbol${totalFd.toStringAsFixed(2)}', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                              ],
+                            ),
+                            const SizedBox(height: 4),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                const Text('90% Backed Limit:', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                                Text('$currencySymbol${recommendedLimit.toStringAsFixed(2)}', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.greenAccent)),
+                              ],
+                            ),
+                            const SizedBox(height: 10),
+                            SizedBox(
+                              width: double.infinity,
+                              child: OutlinedButton.icon(
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: Colors.amberAccent,
+                                  side: const BorderSide(color: Colors.amberAccent),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                ),
+                                icon: const Icon(Icons.sync_rounded, size: 16),
+                                label: const Text('Reconcile Limit to 90% of FDs', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                                onPressed: () {
+                                  setModalState(() {
+                                    limitCtrl.text = recommendedLimit.toStringAsFixed(0);
+                                  });
+                                },
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    TextField(
+                      controller: nameCtrl,
+                      decoration: InputDecoration(
+                        labelText: 'Card Name',
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: limitCtrl,
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      decoration: InputDecoration(
+                        labelText: 'Total Credit Limit ($currencySymbol)',
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: usedCtrl,
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      decoration: InputDecoration(
+                        labelText: 'Current Used / Outstanding Due ($currencySymbol)',
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: stmtCtrl,
+                            keyboardType: TextInputType.number,
+                            decoration: InputDecoration(
+                              labelText: 'Statement Day',
+                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: TextField(
+                            controller: dueCtrl,
+                            keyboardType: TextInputType.number,
+                            decoration: InputDecoration(
+                              labelText: 'Due Day',
+                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 20),
+                    ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Theme.of(context).colorScheme.primary,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      ),
+                      onPressed: () {
+                        final newLimit = double.tryParse(limitCtrl.text.trim()) ?? account.creditLimit;
+                        final newUsed = double.tryParse(usedCtrl.text.trim()) ?? account.usedCredit;
+                        final newAvailable = (newLimit - newUsed).clamp(0.0, newLimit);
+                        final newStmtDay = int.tryParse(stmtCtrl.text.trim()) ?? account.statementDateDay;
+                        final newDueDay = int.tryParse(dueCtrl.text.trim()) ?? account.dueDateDay;
+
+                        final updated = account.copyWith(
+                          name: nameCtrl.text.trim().isNotEmpty ? nameCtrl.text.trim() : account.name,
+                          creditLimit: newLimit,
+                          usedCredit: newUsed,
+                          availableCredit: newAvailable,
+                          statementDateDay: newStmtDay,
+                          dueDateDay: newDueDay,
+                          lastUpdated: DateTime.now(),
+                        );
+
+                        context.read<CreditCardBloc>().add(UpdateCreditCardAccountEvent(updated));
+                        Navigator.pop(ctx);
+                        AppSnackBar.show(context, message: 'Credit card settings saved successfully', isError: false);
+                        _refreshAllData(context);
+                      },
+                      child: const Text('Save Card Settings', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -167,6 +349,18 @@ class _FdCreditCardDashboardScreenState extends State<FdCreditCardDashboardScree
         elevation: 0,
         backgroundColor: Colors.transparent,
         actions: [
+          BlocBuilder<CreditCardBloc, CreditCardState>(
+            builder: (context, state) {
+              if (state is CreditCardLoadedState) {
+                return IconButton(
+                  icon: const Icon(Icons.tune_rounded),
+                  onPressed: () => _showEditCardModal(context, state.account),
+                  tooltip: 'Card Settings & Reconcile Limit',
+                );
+              }
+              return const SizedBox.shrink();
+            },
+          ),
           IconButton(
             icon: const Icon(Icons.receipt_long_outlined),
             onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const StatementHistoryScreen())).then((_) => _refreshAllData(context)),

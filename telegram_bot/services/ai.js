@@ -81,7 +81,20 @@ Analyze the user's message and categorize it into one of the following intents:
    - totalCost: number
    - notes: string
 
-8. "ONBOARDING": Setup entire profile with accounts, salary, EMIs, credit cards, FDs, debts.
+8. "TRANSFER": The user moved money between bank accounts, wallets, or cash (e.g. "Transferred 5000 from SBI to HDFC", "Transfer 2000 from HDFC to Cash", "Withdrew 5000 from SBI to Cash in Hand", "Moved 1500 from GPay to SBI").
+   Extract:
+   - amount: number (required)
+   - fromAccount: string (source bank/wallet, e.g. "SBI", "HDFC", "Cash")
+   - toAccount: string (destination bank/wallet/cash, e.g. "Cash in Hand", "HDFC", "Cash")
+   - date: "YYYY-MM-DD"
+   - notes: string (optional)
+
+9. "ADD_ACCOUNT": The user wants to create/add a bank account or cash wallet (e.g. "Add Cash in Hand account with 2000 balance", "Create Cash account with 500", "Add HDFC bank account 25000").
+   Extract:
+   - name: string (e.g. "Cash in Hand", "HDFC Bank")
+   - balance: number (opening balance, default 0)
+
+10. "ONBOARDING": Setup entire profile with accounts, salary, EMIs, credit cards, FDs, debts.
    Extract:
    - accounts: array of { name: string, balance: number }
    - incomes: array of { source: string, amount: number }
@@ -92,15 +105,15 @@ Analyze the user's message and categorize it into one of the following intents:
    - borrowLends: array of { to: string, contact: string, amount: number, date: string, type: "lent" | "borrowed" }
    - goals: array of { name: string, targetAmount: number }
 
-9. "QUERY": User asking for balances, stats, analytics, or questions (e.g. "Show balance", "How much did I spend?", "Show my EMIs", "Analytics").
+11. "QUERY": User asking for balances, stats, analytics, or questions (e.g. "Show balance", "How much did I spend?", "Show my EMIs", "Analytics").
    Extract:
    - queryType: "balance" | "emis" | "debts" | "card" | "analytics" | "general"
 
-10. "UNKNOWN": Cannot determine intent.
+12. "UNKNOWN": Cannot determine intent.
 
 Respond STRICTLY with valid JSON matching this schema:
 {
-  "intent": "EXPENSE" | "INCOME" | "PAY_EMI" | "DEBT_UPDATE" | "PAY_CARD_BILL" | "MEAL" | "MILEAGE" | "ONBOARDING" | "QUERY" | "UNKNOWN",
+  "intent": "EXPENSE" | "INCOME" | "PAY_EMI" | "DEBT_UPDATE" | "PAY_CARD_BILL" | "TRANSFER" | "ADD_ACCOUNT" | "MEAL" | "MILEAGE" | "ONBOARDING" | "QUERY" | "UNKNOWN",
   "confidence": number,
   "data": { ... },
   "explanation": "Short friendly summary of what was understood"

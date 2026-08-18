@@ -20,6 +20,8 @@ const {
   getEmisAndDebts,
   saveOnboardingProfile,
   getSummary,
+  addAccount,
+  logTransfer,
 } = require("../services/firebase");
 
 const { parseTextMessage, analyzeImage } = require("../services/ai");
@@ -241,6 +243,78 @@ async function handleBalanceQuery(ctx) {
 }
 bot.command("balance", handleBalanceQuery);
 bot.hears("🏦 Live Balances", handleBalanceQuery);
+
+// ─── ACTION: 🔄 TRANSFER BETWEEN ACCOUNTS ─────────────────────────────────
+bot.command("transfer", async (ctx) => {
+  const chatId = ctx.chat.id;
+  const userId = await getUserIdByChatId(chatId);
+  if (!userId) return ctx.reply("⚠️ Link account first using `/link YOUR_USER_ID`.");
+
+  const text = ctx.message.text.replace("/transfer", "").trim();
+  const parts = text.split(/\s+/);
+  if (parts.length < 3) {
+    return ctx.reply(
+      "💡 *Usage:* `/transfer <amount> <from_account> <to_account>`\n\n" +
+      "• Example: `/transfer 5000 SBI HDFC`\n" +
+      "• Example: `/transfer 2000 SBI Cash`\n" +
+      "• Or just type in natural language: _'Transferred ₹2,000 from SBI to Cash in Hand'_",
+      { parse_mode: "Markdown", ...mainMenu }
+    );
+  }
+
+  const amount = Number(parts[0]);
+  const fromAccount = parts[1];
+  const toAccount = parts.slice(2).join(" ");
+
+  try {
+    const res = await logTransfer(userId, { amount, fromAccount, toAccount });
+    const reply = `🔄 *Transfer Recorded!*\n\n` +
+      `💰 *Amount:* ₹${res.amount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}\n` +
+      `📤 *From:* 🏦 ${res.fromAccountName} (Bal: ₹${res.fromNewBalance.toLocaleString("en-IN", { minimumFractionDigits: 2 })})\n` +
+      `📥 *To:* 🏦 ${res.toAccountName} (Bal: ₹${res.toNewBalance.toLocaleString("en-IN", { minimumFractionDigits: 2 })})\n\n` +
+      `_Synced across your OrbitLife App in real time!_`;
+    return ctx.reply(reply, { parse_mode: "Markdown", ...postActionChips });
+  } catch (err) {
+    return ctx.reply(`❌ *Transfer Error:* ${err.message}`, { parse_mode: "Markdown" });
+  }
+});
+
+// ─── ACTION: 🏦 ADD ACCOUNT (e.g. Cash in Hand) ────────────────────────────
+bot.command("addaccount", async (ctx) => {
+  const chatId = ctx.chat.id;
+  const userId = await getUserIdByChatId(chatId);
+  if (!userId) return ctx.reply("⚠️ Link account first using `/link YOUR_USER_ID`.");
+
+  const text = ctx.message.text.replace("/addaccount", "").trim();
+  const parts = text.split(/\s+/);
+  if (parts.length < 1 || !text) {
+    return ctx.reply(
+      "💡 *Usage:* `/addaccount <Account Name> <Initial Balance>`\n\n" +
+      "• Example: `/addaccount Cash in Hand 2000`\n" +
+      "• Example: `/addaccount HDFC Bank 25000`",
+      { parse_mode: "Markdown", ...mainMenu }
+    );
+  }
+
+  const lastPart = parts[parts.length - 1];
+  let balance = 0;
+  let name = text;
+  if (!isNaN(Number(lastPart))) {
+    balance = Number(lastPart);
+    name = parts.slice(0, -1).join(" ");
+  }
+
+  try {
+    const res = await addAccount(userId, { name, balance });
+    const reply = `🏦 *Account ${res.isNew ? "Created" : "Updated"}!*\n\n` +
+      `📌 *Name:* ${res.name}\n` +
+      `💰 *Balance:* ₹${res.balance.toLocaleString("en-IN", { minimumFractionDigits: 2 })}\n\n` +
+      `_Available for spends and bank transfers!_`;
+    return ctx.reply(reply, { parse_mode: "Markdown", ...postActionChips });
+  } catch (err) {
+    return ctx.reply(`❌ *Error:* ${err.message}`, { parse_mode: "Markdown" });
+  }
+});
 
 // ─── ACTION: 💳 SUPERMONEY CARD ────────────────────────────────────────────
 async function handleCardQuery(ctx) {
@@ -537,6 +611,35 @@ bot.on("text", async (ctx) => {
         `💰 *Amount Paid:* ₹${res.amountPaid.toLocaleString("en-IN", { minimumFractionDigits: 2 })}\n` +
         `🟢 *Available Credit Restored:* ₹${res.newAvailableCredit.toLocaleString("en-IN", { minimumFractionDigits: 2 })}\n` +
         `🔴 *Remaining Used Credit:* ₹${res.newUsedCredit.toLocaleString("en-IN", { minimumFractionDigits: 2 })}`;
+      return ctx.reply(reply, { parse_mode: "Markdown", ...postActionChips });
+    }
+
+    // 5. TRANSFER (Bank to Bank, ATM withdrawal, Cash in Hand)
+    if (parsed.intent === "TRANSFER") {
+      const { amount, fromAccount, toAccount, date, notes } = parsed.data;
+      const res = await logTransfer(userId, {
+        amount,
+        fromAccount: fromAccount || "Default",
+        toAccount: toAccount || "Cash in Hand",
+        date,
+        notes,
+      });
+      const reply = `🔄 *Transfer Recorded!*\n\n` +
+        `💰 *Amount Transferred:* ₹${res.amount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}\n` +
+        `📤 *From:* 🏦 ${res.fromAccountName} (Bal: ₹${res.fromNewBalance.toLocaleString("en-IN", { minimumFractionDigits: 2 })})\n` +
+        `📥 *To:* 🏦 ${res.toAccountName} (Bal: ₹${res.toNewBalance.toLocaleString("en-IN", { minimumFractionDigits: 2 })})\n\n` +
+        `_Synced across your OrbitLife App in real time!_`;
+      return ctx.reply(reply, { parse_mode: "Markdown", ...postActionChips });
+    }
+
+    // 6. ADD_ACCOUNT (e.g. Cash in Hand)
+    if (parsed.intent === "ADD_ACCOUNT") {
+      const { name, balance } = parsed.data;
+      const res = await addAccount(userId, { name: name || "Cash in Hand", balance: balance || 0 });
+      const reply = `🏦 *Account ${res.isNew ? "Created" : "Updated"}!*\n\n` +
+        `📌 *Name:* ${res.name}\n` +
+        `💰 *Balance:* ₹${res.balance.toLocaleString("en-IN", { minimumFractionDigits: 2 })}\n\n` +
+        `_Available for spends and bank transfers!_`;
       return ctx.reply(reply, { parse_mode: "Markdown", ...postActionChips });
     }
 
