@@ -98,7 +98,22 @@ class AccountsViewModel extends ChangeNotifier {
     }
   }
 
+  List<AccountEntity> get liquidAccounts {
+    return _accounts.where((acc) {
+      final nameLower = acc.name.toLowerCase();
+      return acc.id != 'supermoney' &&
+          !nameLower.contains('credit card') &&
+          !nameLower.contains('supermoney') &&
+          !nameLower.contains('super money');
+    }).toList();
+  }
+
+  double get totalLiquidBalance {
+    return liquidAccounts.fold(0.0, (sum, acc) => sum + acc.openingBalance);
+  }
+
   double get totalBalance {
-    return _accounts.fold(0.0, (sum, acc) => sum + acc.openingBalance);
+    // Only count actual liquid bank & cash balances for Safe Daily Limit and Net Balance!
+    return totalLiquidBalance;
   }
 }
