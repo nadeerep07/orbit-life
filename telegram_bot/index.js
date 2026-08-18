@@ -108,7 +108,8 @@ async function handleBalanceQuery(ctx) {
     }
 
     if (data.creditCard) {
-      reply += `💳 *Credit Card Debt:* -₹${data.creditCard.used.toLocaleString("en-IN", { minimumFractionDigits: 2 })}\n`;
+      reply += `💳 *Credit Card Outstanding Due:* -₹${data.creditCard.used.toLocaleString("en-IN", { minimumFractionDigits: 2 })}\n`;
+      reply += `   _(Available Credit: ₹${data.creditCard.available.toLocaleString("en-IN", { minimumFractionDigits: 2 })} / Limit: ₹${data.creditCard.limit.toLocaleString("en-IN", { minimumFractionDigits: 2 })})_\n`;
     }
 
     reply += `\n🌟 *Net Liquid Worth:* ₹${data.netWorth.toLocaleString("en-IN", { minimumFractionDigits: 2 })}`;

@@ -765,14 +765,27 @@ async function getBalances(userId) {
   const userData = await getUserData(userId);
   if (!userData) return null;
 
-  const accounts = userData.accounts || [];
+  const rawAccounts = userData.accounts || [];
   const expenses = userData.expenses || [];
   const incomes = userData.incomes || [];
   const cc = userData.creditCardAccount;
   const fds = userData.fdLots || [];
 
-  // Calculate live balances
-  const detailedAccounts = accounts.map((a) => {
+  // Filter out credit card accounts from liquid bank/cash accounts
+  const liquidAccounts = rawAccounts.filter((a) => {
+    const nameLower = (a.name || "").toLowerCase();
+    const idLower = (a.id || "").toLowerCase();
+    return (
+      idLower !== "supermoney" &&
+      !nameLower.includes("credit card") &&
+      !nameLower.includes("super money") &&
+      !nameLower.includes("supermoney") &&
+      a.type !== "credit_card"
+    );
+  });
+
+  // Calculate live balances for liquid accounts only
+  const detailedAccounts = liquidAccounts.map((a) => {
     const accIncomes = incomes
       .filter((i) => i.accountId === a.id)
       .reduce((sum, i) => sum + (Number(i.amount) || 0), 0);
