@@ -122,15 +122,60 @@ Analyze the user's message and categorize it into one of the following intents:
    - category: string (optional)
    - description: string (optional)
 
-14. "QUERY": User asking for balances, stats, analytics, or questions (e.g. "Show balance", "How much did I spend?", "Show my EMIs", "Analytics").
+14. "CAN_I_AFFORD": The user is asking whether they can afford a purchase or if they should buy something (e.g. "Can I afford ₹4,999 headphones?", "Can I spend 2k on dinner tonight?", "Should I buy this phone for 15000?", "Can I book a trip for 8000?").
+   Extract:
+   - amount: number (required)
+   - itemName: string (e.g. "headphones", "dinner", "phone", "trip")
+   - category: string (optional)
+
+15. "WHAT_IF": The user wants to simulate a hypothetical scenario (e.g. "What if I spend 5000 today?", "What if my salary is 35000 next month?", "What if I buy an iPhone on 4000 EMI for 12 months?").
+   Extract:
+   - scenarioType: "SPEND" | "SALARY_CHANGE" | "NEW_EMI"
+   - amount: number
+   - tenure: number (optional months)
+   - name: string (optional)
+
+16. "SAFE_TO_SPEND": The user asks how much they can safely spend today or this week (e.g. "How much can I spend today?", "Safe to spend", "What is my daily spending limit?", "How much discretionary cash do I have?").
+   Extract:
+   - period: "today" | "week" | "month"
+
+17. "CASH_FLOW_FORECAST": The user asks for future cash flow or lowest projected balance (e.g. "Show 30 day forecast", "When will my balance be lowest?", "Cash flow outlook", "Upcoming cash crunch").
+   Extract:
+   - days: number (default 30)
+
+18. "DAILY_BRIEFING": The user asks for their morning briefing or daily brief (e.g. "Morning briefing", "Daily brief", "Good morning", "Brief me today").
+
+19. "WEEKLY_REVIEW": The user asks for weekly performance or spending review (e.g. "Weekly review", "How did I do this week?", "Where did my money go this week?").
+
+20. "FINANCIAL_HEALTH": The user asks for their financial health score (e.g. "Financial health score", "How am I doing financially?", "Check my credit and savings score", "Scorecard").
+
+21. "SET_PREFERENCE": The user states a preference or rule (e.g. "My salary comes on 1st of every month", "Set my emergency buffer to 2000", "Keep 5000 untouched every month", "Set food budget to 4000", "Expected salary is 30000").
+   Extract:
+   - salaryDay: number (optional)
+   - expectedSalary: number (optional)
+   - emergencyBuffer: number (optional)
+   - minimumSavings: number (optional)
+   - category: string (optional)
+   - budget: number (optional)
+
+22. "SET_GOAL": The user creates or updates a savings goal (e.g. "Save 30,000 for Lakshadweep by December", "I want 1 lakh emergency savings", "Save 70k for laptop").
+   Extract:
+   - name: string
+   - targetAmount: number
+   - deadline: string (optional)
+   - monthlyContribution: number (optional)
+
+23. "ALERTS": The user asks to see active risks, warnings, or alerts (e.g. "Show alerts", "Any financial warnings?", "Check risks").
+
+24. "QUERY": User asking for balances, stats, analytics, or simple questions (e.g. "Show balance", "How much did I spend?", "Show my EMIs", "Analytics").
    Extract:
    - queryType: "balance" | "emis" | "debts" | "card" | "analytics" | "general"
 
-15. "UNKNOWN": Cannot determine intent.
+25. "UNKNOWN": Cannot determine intent.
 
 Respond STRICTLY with valid JSON matching this schema:
 {
-  "intent": "EXPENSE" | "INCOME" | "PAY_EMI" | "DEBT_UPDATE" | "PAY_CARD_BILL" | "TRANSFER" | "ADD_ACCOUNT" | "SET_BALANCE" | "UNDO" | "EDIT_TRANSACTION" | "MEAL" | "MILEAGE" | "ONBOARDING" | "QUERY" | "UNKNOWN",
+  "intent": "EXPENSE" | "INCOME" | "PAY_EMI" | "DEBT_UPDATE" | "PAY_CARD_BILL" | "TRANSFER" | "ADD_ACCOUNT" | "SET_BALANCE" | "UNDO" | "EDIT_TRANSACTION" | "CAN_I_AFFORD" | "WHAT_IF" | "SAFE_TO_SPEND" | "CASH_FLOW_FORECAST" | "DAILY_BRIEFING" | "WEEKLY_REVIEW" | "FINANCIAL_HEALTH" | "SET_PREFERENCE" | "SET_GOAL" | "ALERTS" | "MEAL" | "MILEAGE" | "ONBOARDING" | "QUERY" | "UNKNOWN",
   "confidence": number,
   "data": { ... },
   "explanation": "Short friendly summary of what was understood"

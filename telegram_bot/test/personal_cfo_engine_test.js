@@ -1,0 +1,150 @@
+/**
+ * OrbitLife AI Personal CFO Suite — Comprehensive Automated Tests
+ */
+
+const assert = require("assert");
+const { calculateSafeToSpend, canIAfford, simulateScenario } = require("../services/decision_engine");
+const { generate30DayForecast, detectRecurringPatterns } = require("../services/forecasting");
+const { generateDailyBriefing, generateWeeklyReview, calculateFinancialHealthScore } = require("../services/insights");
+const { evaluateAlerts } = require("../services/alerts");
+const { acquireIdempotencyLock } = require("../services/idempotency");
+
+console.log("🧪 Running OrbitLife AI Personal CFO Engine Tests...\n");
+
+// Mock User Financial Data
+const mockUserData = {
+  accounts: [
+    { id: "sbi_1", name: "SBI Savings", openingBalance: 12500 },
+    { id: "hdfc_1", name: "HDFC Savings", openingBalance: 3500 },
+    { id: "cash_1", name: "Cash in Hand", openingBalance: 1000 },
+  ],
+  emis: [
+    { id: "emi_1", title: "College Loan", monthlyEmi: 3750, remainingMonths: 10, isPaid: false },
+  ],
+  creditCardAccount: {
+    name: "Supermoney Card",
+    creditLimit: 26713.8,
+    usedCredit: 2920,
+    dueDateDay: 15,
+  },
+  borrowLends: [
+    {
+      id: "bl_1",
+      personName: "Shamveel",
+      type: "lent",
+      amount: 10000,
+      isSettled: false,
+      status: "pending",
+      transactions: [{ amount: 7500, type: "repayment" }],
+    },
+  ],
+  financialPreferences: {
+    salaryDayOfMonth: 1,
+    expectedMonthlySalary: 29600,
+    emergencyBufferTarget: 2000,
+    minimumMonthlySavings: 3000,
+    categoryBudgets: {
+      food: 5000,
+      shopping: 3000,
+    },
+  },
+  fdLots: [
+    { id: "fd_1", principalAmount: 29682 },
+  ],
+  expenses: [
+    { id: "e_1", amount: 450, categoryId: "food", date: new Date().toISOString() },
+    { id: "e_2", amount: 1200, categoryId: "shopping", date: new Date(Date.now() - 2 * 86400000).toISOString() },
+    { id: "e_3", amount: 3750, description: "College Loan EMI", categoryId: "bills", date: new Date(Date.now() - 30 * 86400000).toISOString() },
+    { id: "e_4", amount: 3750, description: "College Loan EMI", categoryId: "bills", date: new Date(Date.now() - 60 * 86400000).toISOString() },
+  ],
+  goals: [
+    { id: "g_1", name: "Lakshadweep Trip", targetAmount: 30000, currentAmount: 12000, monthlyContribution: 2500, isCompleted: false },
+  ],
+};
+
+// 1. Safe-To-Spend Tests
+console.log("🔹 1. Testing calculateSafeToSpend...");
+const safe = calculateSafeToSpend(mockUserData, new Date("2026-08-19"));
+assert.strictEqual(safe.liquidMoney, 17000, "Total Liquid cash should be 17,000");
+assert.ok(safe.safeToSpendToday > 0, "Safe to spend today should be > 0");
+assert.ok(safe.discretionaryBalance > 0, "Discretionary balance should be positive");
+assert.strictEqual(safe.financialRiskLevel, "SAFE", "Risk level should be SAFE");
+console.log(`   ✅ Liquid: ₹${safe.liquidMoney}, Safe/Day: ₹${safe.safeToSpendToday}, Discretionary: ₹${safe.discretionaryBalance}`);
+
+// 2. Affordability Tests
+console.log("🔹 2. Testing canIAfford...");
+// A: Small purchase (Daily allowance)
+const aff1 = canIAfford(mockUserData, { amount: 200, itemName: "Lunch" });
+assert.strictEqual(aff1.verdict, "RECOMMENDED", "Small purchase should be RECOMMENDED");
+console.log(`   ✅ 200 Lunch: ${aff1.verdictTitle}`);
+
+// B: Large purchase exceeding liquid money
+const aff2 = canIAfford(mockUserData, { amount: 25000, itemName: "New Laptop" });
+assert.strictEqual(aff2.verdict, "NOT_RECOMMENDED", "Purchase exceeding liquid should be NOT_RECOMMENDED");
+console.log(`   ✅ 25k Laptop: ${aff2.verdictTitle}`);
+
+// C: Mid purchase consuming discretionary budget
+const aff3 = canIAfford(mockUserData, { amount: 2000, itemName: "Shoes" });
+assert.ok(aff3.verdict === "PROCEED_WITH_CAUTION" || aff3.verdict === "WAIT_FOR_SALARY", "Mid purchase evaluated properly");
+console.log(`   ✅ 2k Shoes: ${aff3.verdictTitle}`);
+
+// 3. What-If Simulation Tests
+console.log("🔹 3. Testing simulateScenario...");
+const sim = simulateScenario(mockUserData, { type: "SPEND", amount: 5000, name: "Weekend Trip" });
+assert.strictEqual(sim.isSimulation, true, "Should be tagged as simulation");
+assert.strictEqual(sim.current.liquidMoney, 17000, "Original data untouched");
+assert.strictEqual(sim.simulated.liquidMoney, 12000, "Simulated liquid should be reduced by 5000");
+console.log(`   ✅ What-If Spend ₹5,000: Diff = ₹${sim.impact.dailyDiff}/day`);
+
+// 4. Cash Flow Forecast Tests
+console.log("🔹 4. Testing generate30DayForecast...");
+const forecast = generate30DayForecast(mockUserData, new Date("2026-08-19"));
+assert.strictEqual(forecast.timeline.length, 31, "Should project 31 days (0 to 30)");
+assert.ok(forecast.lowestProjectedBalance > 0, "Lowest projected balance should be positive");
+assert.ok(forecast.majorEvents.length > 0, "Should detect salary and EMI events");
+console.log(`   ✅ 30-Day Forecast: Lowest = ₹${forecast.lowestProjectedBalance} on ${forecast.lowestBalanceDate}`);
+
+// 5. Recurring Pattern Detection Tests
+console.log("🔹 5. Testing detectRecurringPatterns...");
+const recurring = detectRecurringPatterns(mockUserData);
+assert.ok(recurring.length > 0, "Should detect College Loan EMI recurring pattern");
+console.log(`   ✅ Detected recurring: ${recurring.map((r) => r.name).join(", ")}`);
+
+// 6. Daily Briefing Tests
+console.log("🔹 6. Testing generateDailyBriefing...");
+const brief = generateDailyBriefing(mockUserData);
+assert.ok(brief.cfoTip.length > 0, "Should include actionable CFO tip");
+assert.strictEqual(brief.liquidMoney, 17000);
+console.log(`   ✅ Daily Briefing: Safe Today ₹${brief.safeToSpendToday}, Tip: "${brief.cfoTip}"`);
+
+// 7. Weekly Review Tests
+console.log("🔹 7. Testing generateWeeklyReview...");
+const review = generateWeeklyReview(mockUserData);
+assert.ok(review.thisWeekSpent >= 0);
+assert.ok(review.verdict.length > 0);
+console.log(`   ✅ Weekly Review: Top Category = ${review.topCategory}, Spent = ₹${review.thisWeekSpent}`);
+
+// 8. Financial Health Score Tests
+console.log("🔹 8. Testing calculateFinancialHealthScore...");
+const health = calculateFinancialHealthScore(mockUserData);
+assert.ok(health.score >= 0 && health.score <= 100, "Health score must be between 0 and 100");
+assert.ok(health.pillars.savingsAndNetWorth.score > 0);
+assert.ok(health.topImprovement.length > 0);
+console.log(`   ✅ Financial Health: ${health.score}/100 (${health.rating}) — Top: "${health.topImprovement}"`);
+
+// 9. Alert Evaluation Tests
+console.log("🔹 9. Testing evaluateAlerts...");
+const alerts = evaluateAlerts(mockUserData);
+assert.ok(Array.isArray(alerts), "Alerts should return an array");
+console.log(`   ✅ Evaluated Alerts: ${alerts.length} active alerts found`);
+
+// 10. Idempotency Lock Tests
+console.log("🔹 10. Testing acquireIdempotencyLock...");
+const lockKey = "msg_test_12345";
+const lock1 = acquireIdempotencyLock(lockKey, 5000);
+assert.strictEqual(lock1, true, "First lock attempt must succeed");
+const lock2 = acquireIdempotencyLock(lockKey, 5000);
+assert.strictEqual(lock2, false, "Duplicate lock attempt must be rejected");
+console.log("   ✅ Idempotency Guard successfully blocked duplicate request!");
+
+console.log("\n🎉 ALL 10 ORBITLIFE PERSONAL CFO SUITE TESTS PASSED WITH 100% SUCCESS!\n");

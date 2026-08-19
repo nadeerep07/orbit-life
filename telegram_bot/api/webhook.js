@@ -30,74 +30,68 @@ const {
 } = require("../services/firebase");
 
 const { parseTextMessage, analyzeImage } = require("../services/ai");
+const { calculateSafeToSpend, canIAfford, simulateScenario } = require("../services/decision_engine");
+const { generate30DayForecast, detectRecurringPatterns } = require("../services/forecasting");
+const { generateDailyBriefing, generateWeeklyReview, calculateFinancialHealthScore } = require("../services/insights");
+const { getPreferences, updatePreferences, setCategoryBudget, setGoal } = require("../services/memory");
+const { evaluateAlerts } = require("../services/alerts");
+const { transcribeAudio } = require("../services/voice");
+const { acquireIdempotencyLock } = require("../services/idempotency");
 
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 initializeFirebase();
 
 const bot = new Telegraf(BOT_TOKEN);
 
-const WEB_APP_URL = "https://orbit-life-zeta.vercel.app/";
-
-// ─── CUSTOM PERSISTENT REPLY KEYBOARD ───────────────────────────────────────
-const mainMenu = Markup.keyboard([
-  ["📊 Today's Stats", "🎯 Daily Scorecard"],
-  ["🏦 Live Balances", "💳 Supermoney Card"],
-  ["📑 Active EMIs", "🤝 Borrow & Lend"],
-
+// ─── FINANCIAL COMMAND CENTER KEYBOARD ───────────────────────────────────────
+const commandCenterMenu = Markup.keyboard([
+  ["🏦 Money & Balances", "💸 Safe To Spend"],
+  ["💳 Supermoney Card", "🎯 Goals & Budgets"],
+  ["📊 Daily Briefing", "📈 Weekly Review"],
+  ["🧠 Financial Health", "🔮 What If? Simulator"],
+  ["📸 Scan Receipt", "❓ Help & Commands"],
 ]).resize();
-
-// Inline Action Chips
-const postActionChips = Markup.inlineKeyboard([
-  [
-    Markup.button.callback("🏦 View Balance", "quick_balance"),
-    Markup.button.callback("🎯 Scorecard", "quick_scorecard"),
-  ],
-  [
-    Markup.button.callback("💳 Supermoney Card", "quick_card"),
-    Markup.button.callback("📑 My EMIs", "quick_emis"),
-  ],
-]);
 
 // ─── COMMAND: /start ────────────────────────────────────────────────────────
 bot.start(async (ctx) => {
   const chatId = ctx.chat.id;
   const userId = await getUserIdByChatId(chatId);
 
-  let msg = `👋 *Welcome to OrbitLife Full Financial Coach!*\n\n` +
-    `Automate your personal finances, track Supermoney card limits, EMIs, and daily safe limits in Indian Rupees (₹ INR):\n\n`;
+  let msg = `👋 *Welcome to OrbitLife — Your 24/7 AI Personal CFO!*\n\n` +
+    `OrbitLife is your intelligent financial command center. You can talk naturally, send voice notes, scan receipts, or ask for financial advice:\n\n`;
 
   if (userId) {
-    msg += `✅ *Connected to App:* \`${userId.substring(0, 8)}...\`\n\n` +
-      `⚡ *Tap Any Quick Action Below or Send Text/Voice:*\n` +
-      `• *Log Spends:* _"Spent ₹350 on lunch with UPI"_\n` +
-      `• *Card Spends:* _"Spent ₹1,200 on Supermoney card"_\n` +
-      `• *Log Salary:* _"Received ₹29,600 salary"_\n` +
-      `• *Mark EMI Paid:* _"Paid College EMI ₹3,750"_\n` +
-      `• *Debt Repayment:* _"Shamveel paid back ₹5,000"_\n` +
-      `• *Pay Card Bill:* _"Paid ₹10,000 credit card bill"_\n` +
-      `• *Daily Scorecard:* Tap *🎯 Daily Scorecard*\n` +
-      `• *Snap Receipt or Food Photo:* Send any picture! 📸`;
+    msg += `✅ *Linked Account:* \`${userId.substring(0, 8)}...\`\n\n` +
+      `⚡ *Try asking Orbit right now:*\n` +
+      `• _"How much can I safely spend today?"_\n` +
+      `• _"Can I afford ₹4,999 headphones?"_\n` +
+      `• _"What if I spend ₹5,000 this weekend?"_\n` +
+      `• _"Give me my morning briefing"_\n` +
+      `• _"Check my financial health score"_\n` +
+      `• _"Spent ₹350 on lunch with UPI"_\n` +
+      `• _"Shamveel paid remaining ₹2,500 to SBI"_`;
   } else {
-    msg += `⚠️ *Account Not Linked!*\n\nSend: \`/link YOUR_FIREBASE_USER_ID\``;
+    msg += `⚠️ *Account Not Linked Yet*\n` +
+      `Use \`/link YOUR_FIREBASE_USER_ID\` from your OrbitLife App settings to connect in seconds.`;
   }
 
-  await ctx.reply(msg, { parse_mode: "Markdown", ...mainMenu });
+  await ctx.reply(msg, { parse_mode: "Markdown", ...commandCenterMenu });
 });
 
+// ─── COMMAND: /link & /unlink ───────────────────────────────────────────────
 bot.command("link", async (ctx) => {
   const chatId = ctx.chat.id;
-  const args = ctx.message.text.split(" ").slice(1);
-  const userId = args[0]?.trim();
-
-  if (!userId) {
-    return ctx.reply("❌ Please provide your Firebase User ID.\nExample: `/link abc123XYZ456`", { parse_mode: "Markdown" });
+  const parts = ctx.message.text.split(/\s+/);
+  if (parts.length < 2) {
+    return ctx.reply("💡 *Usage:* `/link <YOUR_USER_ID>`", { parse_mode: "Markdown" });
   }
 
+  const userId = parts[1].trim();
   try {
-    await linkUserChatId(userId, chatId);
-    await ctx.reply(`🎉 *Success! Linked to OrbitLife.*\n\nUser ID: \`${userId}\`\n\nYou can now manage expenses, EMIs, debts, and balances directly! 🚀`, { parse_mode: "Markdown", ...mainMenu });
+    await linkUserChatId(chatId, userId);
+    return ctx.reply(`🎉 *Successfully Connected to OrbitLife!*`, { parse_mode: "Markdown", ...commandCenterMenu });
   } catch (err) {
-    await ctx.reply(`❌ *Failed to link account:* ${err.message}`, { parse_mode: "Markdown" });
+    return ctx.reply(`❌ *Link Error:* ${err.message}`);
   }
 });
 
@@ -105,224 +99,351 @@ bot.command("unlink", async (ctx) => {
   const chatId = ctx.chat.id;
   try {
     await unlinkUserChatId(chatId);
-    await ctx.reply("🔌 *Account Unlinked!*\n\nYou can link a new account anytime with:\n`/link <NEW_USER_ID>`", { parse_mode: "Markdown" });
+    return ctx.reply("🔌 *Account Unlinked Successfully.*", { parse_mode: "Markdown" });
+  } catch (err) {
+    return ctx.reply(`❌ *Error:* ${err.message}`);
+  }
+});
+
+// ─── ACTION: 💸 SAFE TO SPEND ───────────────────────────────────────────────
+async function handleSafeToSpendQuery(ctx) {
+  const chatId = ctx.chat.id;
+  const userId = await getUserIdByChatId(chatId);
+  if (!userId) return ctx.reply("⚠️ Link account first using `/link YOUR_USER_ID`.");
+
+  try {
+    const userData = await getUserData(userId);
+    const safe = calculateSafeToSpend(userData);
+
+    const riskEmoji = safe.financialRiskLevel === "SAFE" ? "🟢" : safe.financialRiskLevel === "MODERATE" ? "🟡" : safe.financialRiskLevel === "TIGHT" ? "🟠" : "🔴";
+
+    const msg = `💸 *OrbitLife Dynamic Safe-To-Spend*\n\n` +
+      `💰 *Safe to Spend Today:* *₹${safe.safeToSpendToday.toLocaleString("en-IN")}*\n` +
+      `📅 *Safe for This Week:* ₹${safe.safeToSpendThisWeek.toLocaleString("en-IN")}\n` +
+      `💼 *Discretionary Surplus:* ₹${safe.discretionaryBalance.toLocaleString("en-IN")}\n` +
+      `⏳ *Days to Salary:* ${safe.daysUntilSalary} days (Due ${safe.breakdown.nextSalaryDate})\n\n` +
+      `🛡️ *Protected Funds:* ₹${safe.protectedBuffer.toLocaleString("en-IN")} (Emergency Buffer + Savings)\n` +
+      `📑 *Upcoming Commitments:* ₹${safe.upcomingCommitments.toLocaleString("en-IN")} (EMIs + CC Dues)\n` +
+      `${riskEmoji} *Financial State:* *${safe.financialRiskLevel}*\n\n` +
+      `_Orbit protects your bills and savings before calculating spending capacity._`;
+
+    await ctx.reply(msg, { parse_mode: "Markdown" });
   } catch (err) {
     await ctx.reply(`❌ *Error:* ${err.message}`);
   }
-});
-
-bot.command("whoami", async (ctx) => {
-  const chatId = ctx.chat.id;
-  const userId = await getUserIdByChatId(chatId);
-  if (userId) {
-    await ctx.reply(`👤 *Current Connected Account:*\n\nUser ID: \`${userId}\`\n\nTo switch accounts, send:\n\`/link <NEW_USER_ID>\`\nOr to disconnect, send:\n\`/unlink\``, { parse_mode: "Markdown", ...mainMenu });
-  } else {
-    await ctx.reply("⚠️ No account is currently linked.\n\nSend `/link <USER_ID>` to connect.", { parse_mode: "Markdown" });
-  }
-});
-
-// ─── ACTION: 🎯 DAILY SCORECARD ────────────────────────────────────────────
-async function handleDailyScorecard(ctx) {
-  const chatId = ctx.chat.id;
-  const userId = await getUserIdByChatId(chatId);
-  if (!userId) return ctx.reply("⚠️ Please link your account first using `/link <USER_ID>`.");
-
-  try {
-    const summary = await getSummary(userId);
-    const balanceData = await getBalances(userId);
-    const debtData = await getEmisAndDebts(userId);
-    const userData = await getUserData(userId);
-
-    const todayStr = new Date().toISOString().split("T")[0];
-
-    // Calculate Daily Safe Limit
-    const monthlyIncome = Number(summary?.monthEarned || 29600);
-    const fixedOutflows = (userData?.emis || []).reduce((sum, e) => sum + (Number(e.monthlyEmi || e.amount) || 0), 0) + 1059; // EMIs + Fixed Bills
-    const monthlySurplus = Math.max(0, monthlyIncome - fixedOutflows);
-    const dailySafeLimit = Math.round(monthlySurplus / 30) || 700;
-    const spentToday = Math.round(summary?.todaySpent || 0);
-
-    const isSpendUnderLimit = spentToday <= dailySafeLimit;
-    const spendStatusEmoji = isSpendUnderLimit ? "✅" : "⚠️";
-
-    // Credit Card Utilization
-    const cc = balanceData?.creditCard;
-    const ccLimit = cc?.limit || 26713.8;
-    const ccUsed = cc?.used || 0;
-    const ccRatio = Math.round((ccUsed / ccLimit) * 100);
-    const ccStatusEmoji = ccRatio <= 30 ? "✅" : ccRatio <= 50 ? "🟡" : "🔴";
-
-    // EMIs
-    const totalEmis = debtData?.emis?.length || 0;
-    const totalMonthlyEmi = debtData?.emis?.reduce((sum, e) => sum + e.monthlyEmi, 0) || 0;
-
-    // Nutrition
-    const calories = summary?.todayCalories || 0;
-    const calTarget = summary?.calorieTarget || 2000;
-    const calEmoji = calories > 0 ? "✅" : "⏳";
-
-    let msg = `🎯 *ORBITLIFE DAILY SCORECARD*\n` +
-      `📅 (${todayStr})\n` +
-      `━━━━━━━━━━━━━━━━━━━━\n\n` +
-      `💸 *Daily Spend Cap:* ${spendStatusEmoji} *₹${spentToday.toLocaleString("en-IN")}* / ₹${dailySafeLimit.toLocaleString("en-IN")}\n` +
-      `💳 *Card Utilization:* ${ccStatusEmoji} *${ccRatio}%* (₹${ccUsed.toLocaleString("en-IN")} / ₹${Math.round(ccLimit).toLocaleString("en-IN")})\n` +
-      `🏦 *Liquid Cash:* 💰 *₹${Math.round(balanceData?.totalLiquidCash || 0).toLocaleString("en-IN")}*\n` +
-      `📑 *Active EMIs:* ⏳ *${totalEmis} Active* (₹${totalMonthlyEmi.toLocaleString("en-IN")}/mo)\n` +
-      `🥗 *Daily Calories:* ${calEmoji} *${calories}* / ${calTarget} kcal\n`;
-
-    if (debtData?.borrowLends?.length > 0) {
-      const topDebt = debtData.borrowLends[0];
-      msg += `🤝 *Receivables:* ⏳ *₹${topDebt.amount.toLocaleString("en-IN")}* (${topDebt.personName})\n`;
-    }
-
-    msg += `\n━━━━━━━━━━━━━━━━━━━━\n` +
-      `🔥 *Consistency is King. Win the Day!*`;
-
-    await ctx.reply(msg, { parse_mode: "Markdown", ...mainMenu });
-  } catch (err) {
-    await ctx.reply(`❌ Error generating scorecard: ${err.message}`);
-  }
 }
-bot.command("scorecard", handleDailyScorecard);
-bot.hears("🎯 Daily Scorecard", handleDailyScorecard);
+bot.command("safetospend", handleSafeToSpendQuery);
+bot.hears("💸 Safe To Spend", handleSafeToSpendQuery);
 
-// ─── ACTION: 📊 TODAY'S STATS ──────────────────────────────────────────────
-async function handleStatsQuery(ctx) {
+// ─── ACTION: 🌅 DAILY BRIEFING ──────────────────────────────────────────────
+async function handleBriefingQuery(ctx) {
   const chatId = ctx.chat.id;
   const userId = await getUserIdByChatId(chatId);
   if (!userId) return ctx.reply("⚠️ Link account first.");
 
   try {
-    const summary = await getSummary(userId);
-    if (!summary) return ctx.reply("ℹ️ No data available.");
+    const userData = await getUserData(userId);
+    const brief = generateDailyBriefing(userData);
 
-    const caloriePercent = Math.round((summary.todayCalories / (summary.calorieTarget || 2000)) * 100);
-    const msg = `📊 *OrbitLife Analytics & Today's Stats*\n\n` +
-      `💸 *Spent Today:* ₹${summary.todaySpent.toLocaleString("en-IN", { minimumFractionDigits: 2 })} (${summary.todayExpensesCount} entries)\n` +
-      `📈 *Month Inflow:* ₹${summary.monthEarned.toLocaleString("en-IN", { minimumFractionDigits: 2 })}\n` +
-      `📉 *Month Outflow:* ₹${summary.monthSpent.toLocaleString("en-IN", { minimumFractionDigits: 2 })}\n` +
-      `💼 *Net Monthly Surplus:* ₹${summary.monthNet.toLocaleString("en-IN", { minimumFractionDigits: 2 })}\n\n` +
-      `🥗 *Nutrition Today:*\n` +
-      `• Calories: *${summary.todayCalories}* / ${summary.calorieTarget} kcal (${caloriePercent}%)\n` +
-      `• Protein: *${summary.todayProtein.toFixed(1)}g* | Carbs: *${summary.todayCarbs.toFixed(1)}g* | Fat: *${summary.todayFat.toFixed(1)}g*`;
+    const msg = `🌅 *Orbit Daily Morning Briefing*\n\n` +
+      `💰 *Liquid Cash:* ₹${brief.liquidMoney.toLocaleString("en-IN")}\n` +
+      `💸 *Safe to Spend Today:* *₹${brief.safeToSpendToday.toLocaleString("en-IN")}*\n` +
+      `📅 *Salary In:* ${brief.daysUntilSalary} days\n` +
+      `📌 *Next Bill:* ${brief.nextBill}\n\n` +
+      `💳 *Credit Card:* ₹${brief.creditCard.used.toLocaleString("en-IN")} / ₹${brief.creditCard.limit.toLocaleString("en-IN")} (${brief.creditCard.utilPercent}% Util)\n` +
+      `🎯 *Top Goal:* ${brief.goalProgress}\n` +
+      `💸 *Spent Today:* ₹${brief.todaySpent.toLocaleString("en-IN")}\n\n` +
+      `🧠 *Orbit's CFO Advice:*\n_${brief.cfoTip}_`;
 
-    await ctx.reply(msg, { parse_mode: "Markdown", ...mainMenu });
+    await ctx.reply(msg, { parse_mode: "Markdown" });
   } catch (err) {
-    await ctx.reply(`❌ Error: ${err.message}`);
+    await ctx.reply(`❌ *Error:* ${err.message}`);
   }
 }
-bot.command("today", handleStatsQuery);
-bot.command("stats", handleStatsQuery);
-bot.hears("📊 Today's Stats", handleStatsQuery);
+bot.command("briefing", handleBriefingQuery);
+bot.hears("📊 Daily Briefing", handleBriefingQuery);
 
-// ─── ACTION: 🏦 LIVE BALANCES ──────────────────────────────────────────────
+// ─── ACTION: 📈 WEEKLY REVIEW ───────────────────────────────────────────────
+async function handleWeeklyReviewQuery(ctx) {
+  const chatId = ctx.chat.id;
+  const userId = await getUserIdByChatId(chatId);
+  if (!userId) return ctx.reply("⚠️ Link account first.");
+
+  try {
+    const userData = await getUserData(userId);
+    const rev = generateWeeklyReview(userData);
+
+    const deltaSign = rev.spendDeltaPct > 0 ? "+" : "";
+    const msg = `📈 *OrbitLife Weekly CFO Review*\n\n` +
+      `💸 *Spent Last 7 Days:* ₹${rev.thisWeekSpent.toLocaleString("en-IN")}\n` +
+      `📊 *Velocity vs Prior Week:* ${deltaSign}${rev.spendDeltaPct}%\n` +
+      `🛍️ *Top Category:* ${rev.topCategory.toUpperCase()} (₹${rev.topCategoryAmount.toLocaleString("en-IN")})\n` +
+      `🎯 *Target Cap Next Week:* ₹${rev.nextWeekCap.toLocaleString("en-IN")}\n\n` +
+      `🧠 *Analysis:*\n${rev.verdict}`;
+
+    await ctx.reply(msg, { parse_mode: "Markdown" });
+  } catch (err) {
+    await ctx.reply(`❌ *Error:* ${err.message}`);
+  }
+}
+bot.command("review", handleWeeklyReviewQuery);
+bot.hears("📈 Weekly Review", handleWeeklyReviewQuery);
+
+// ─── ACTION: 🧠 FINANCIAL HEALTH SCORE ──────────────────────────────────────
+async function handleHealthScoreQuery(ctx) {
+  const chatId = ctx.chat.id;
+  const userId = await getUserIdByChatId(chatId);
+  if (!userId) return ctx.reply("⚠️ Link account first.");
+
+  try {
+    const userData = await getUserData(userId);
+    const health = calculateFinancialHealthScore(userData);
+
+    let scoreEmoji = health.score >= 80 ? "🟢" : health.score >= 60 ? "🟡" : "🔴";
+
+    let msg = `🧠 *Orbit Financial Health Score*\n\n` +
+      `${scoreEmoji} *Overall Score:* *${health.score} / 100* (${health.rating})\n\n` +
+      `📊 *Pillar Breakdown:*\n` +
+      `• Savings & Net Worth: *${health.pillars.savingsAndNetWorth.score} / 25*\n` +
+      `• Debt & Loan Burden: *${health.pillars.debtBurden.score} / 25*\n` +
+      `• Credit Card Health: *${health.pillars.creditUtilization.score} / 20*\n` +
+      `• Emergency Reserve: *${health.pillars.emergencyCoverage.score} / 15*\n` +
+      `• Cash Flow Stability: *${health.pillars.cashFlowStability.score} / 15*\n\n`;
+
+    if (health.positives.length > 0) {
+      msg += `✨ *Strengths:*\n` + health.positives.map((p) => `• ${p}`).join("\n") + "\n\n";
+    }
+    if (health.warnings.length > 0) {
+      msg += `⚠️ *Watchouts:*\n` + health.warnings.map((w) => `• ${w}`).join("\n") + "\n\n";
+    }
+
+    msg += `🎯 *Top Recommendation:*\n_${health.topImprovement}_`;
+
+    await ctx.reply(msg, { parse_mode: "Markdown" });
+  } catch (err) {
+    await ctx.reply(`❌ *Error:* ${err.message}`);
+  }
+}
+bot.command("health", handleHealthScoreQuery);
+bot.hears("🧠 Financial Health", handleHealthScoreQuery);
+
+// ─── ACTION: 🔮 WHAT-IF SIMULATOR ───────────────────────────────────────────
+async function handleWhatIfSimulation(ctx, text) {
+  const chatId = ctx.chat.id;
+  const userId = await getUserIdByChatId(chatId);
+  if (!userId) return ctx.reply("⚠️ Link account first.");
+
+  try {
+    const userData = await getUserData(userId);
+    const parsed = await parseTextMessage(text || "What if I spend 5000 today?");
+    const scenario = parsed.data || { type: "SPEND", amount: 5000 };
+
+    const sim = simulateScenario(userData, scenario);
+
+    const msg = `🔮 *OrbitLife Scenario Simulation*\n\n` +
+      `📝 *Scenario:* _${sim.summaryText}_\n\n` +
+      `📊 *Before vs After Simulation:*\n` +
+      `• Liquid Cash: ₹${sim.current.liquidMoney.toLocaleString("en-IN")} ➔ *₹${sim.simulated.liquidMoney.toLocaleString("en-IN")}*\n` +
+      `• Safe Daily Spend: ₹${sim.current.safeDaily.toLocaleString("en-IN")} ➔ *₹${sim.simulated.safeDaily.toLocaleString("en-IN")}/day*\n` +
+      `• Risk Level: ${sim.impact.riskChange}\n\n` +
+      `💡 *CFO Verdict:*\n${sim.recommendation}\n\n` +
+      `🔒 _This is a zero-risk simulation. No actual account data was modified._`;
+
+    await ctx.reply(msg, { parse_mode: "Markdown" });
+  } catch (err) {
+    await ctx.reply(`❌ *Simulation Error:* ${err.message}`);
+  }
+}
+bot.command("whatif", (ctx) => handleWhatIfSimulation(ctx, ctx.message.text));
+bot.hears("🔮 What If? Simulator", (ctx) => ctx.reply("🔮 *What would you like to simulate?*\n\n• _'What if I spend ₹5,000 today?'_\n• _'What if my salary is ₹35,000 next month?'_\n• _'What if I buy a laptop for ₹60,000 on 12 months EMI?'_", { parse_mode: "Markdown" }));
+
+// ─── ACTION: 30-DAY CASH FLOW FORECAST ──────────────────────────────────────
+async function handleForecastQuery(ctx) {
+  const chatId = ctx.chat.id;
+  const userId = await getUserIdByChatId(chatId);
+  if (!userId) return ctx.reply("⚠️ Link account first.");
+
+  try {
+    const userData = await getUserData(userId);
+    const forecast = generate30DayForecast(userData);
+
+    let msg = `📅 *30-Day Cash Flow Projection*\n\n` +
+      `💰 *Starting Liquid Cash:* ₹${forecast.currentLiquidBalance.toLocaleString("en-IN")}\n` +
+      `📉 *Lowest Projected Balance:* *₹${forecast.lowestProjectedBalance.toLocaleString("en-IN")}* (on ${forecast.lowestBalanceDate})\n` +
+      `📈 *Projected Ending Balance:* ₹${forecast.projectedEndingBalance.toLocaleString("en-IN")}\n\n`;
+
+    if (forecast.majorEvents.length > 0) {
+      msg += `📌 *Upcoming Milestones:*\n`;
+      forecast.majorEvents.slice(0, 5).forEach((e) => {
+        msg += `• ${e.date}: ${e.title} (${e.type === "inflow" ? "+" : "-"}₹${e.amount.toLocaleString("en-IN")})\n`;
+      });
+      msg += "\n";
+    }
+
+    msg += `🧠 *CFO Outlook:*\n${forecast.recommendation}`;
+
+    await ctx.reply(msg, { parse_mode: "Markdown" });
+  } catch (err) {
+    await ctx.reply(`❌ *Forecast Error:* ${err.message}`);
+  }
+}
+bot.command("forecast", handleForecastQuery);
+
+// ─── ACTION: 🏦 LIVE BALANCES ───────────────────────────────────────────────
 async function handleBalanceQuery(ctx) {
   const chatId = ctx.chat.id;
   const userId = await getUserIdByChatId(chatId);
-  if (!userId) return ctx.reply("⚠️ Link account with `/link <USER_ID>` first.");
+  if (!userId) return ctx.reply("⚠️ Link account first using `/link YOUR_USER_ID`.");
 
   try {
     const data = await getBalances(userId);
-    if (!data) return ctx.reply("ℹ️ No account data found.");
+    if (!data) return ctx.reply("ℹ️ No account data found. Use `/onboard` to set up.");
 
     let reply = `🏦 *Your Live Balances (OrbitLife)*\n\n`;
-    for (const a of data.accounts) {
-      reply += `• *${a.name}:* ₹${a.balance.toLocaleString("en-IN", { minimumFractionDigits: 2 })}\n`;
+    for (const acc of data.accounts) {
+      reply += `• *${acc.name}:* ₹${acc.balance.toLocaleString("en-IN", { minimumFractionDigits: 2 })}\n`;
     }
-    reply += `\n💰 *Total Liquid Cash:* ₹${data.totalLiquidCash.toLocaleString("en-IN", { minimumFractionDigits: 2 })}\n`;
-
-    if (data.totalFdValue > 0) {
-      reply += `🔒 *Fixed Deposits (FDs):* ₹${data.totalFdValue.toLocaleString("en-IN", { minimumFractionDigits: 2 })}\n`;
-    }
+    reply += `\n💰 *Total Liquid Cash:* *₹${data.totalLiquidCash.toLocaleString("en-IN", { minimumFractionDigits: 2 })}*\n`;
+    reply += `🔒 *Fixed Deposits (FDs):* ₹${data.totalFdValue.toLocaleString("en-IN", { minimumFractionDigits: 2 })}\n`;
 
     if (data.creditCard) {
-      reply += `💳 *Credit Card Outstanding Due:* -₹${data.creditCard.used.toLocaleString("en-IN", { minimumFractionDigits: 2 })}\n`;
-      reply += `   _(Available Credit: ₹${data.creditCard.available.toLocaleString("en-IN", { minimumFractionDigits: 2 })} / Limit: ₹${data.creditCard.limit.toLocaleString("en-IN", { minimumFractionDigits: 2 })})_\n`;
+      reply += `💳 *Credit Card Outstanding Due:* -₹${data.creditCard.used.toLocaleString("en-IN", { minimumFractionDigits: 2 })}\n` +
+        `   _(Available Credit: ₹${data.creditCard.available.toLocaleString("en-IN", { minimumFractionDigits: 2 })} / Limit: ₹${data.creditCard.limit.toLocaleString("en-IN", { minimumFractionDigits: 2 })})_\n`;
     }
+    reply += `\n🌟 *Net Liquid Worth:* *₹${data.netWorth.toLocaleString("en-IN", { minimumFractionDigits: 2 })}*`;
 
-    reply += `\n🌟 *Net Liquid Worth:* ₹${data.netWorth.toLocaleString("en-IN", { minimumFractionDigits: 2 })}`;
-
-    await ctx.reply(reply, { parse_mode: "Markdown", ...mainMenu });
+    await ctx.reply(reply, { parse_mode: "Markdown" });
   } catch (err) {
     await ctx.reply(`❌ Error: ${err.message}`);
   }
 }
 bot.command("balance", handleBalanceQuery);
-bot.hears("🏦 Live Balances", handleBalanceQuery);
+bot.hears("🏦 Money & Balances", handleBalanceQuery);
 
-// ─── ACTION: 🔄 TRANSFER BETWEEN ACCOUNTS ─────────────────────────────────
-bot.command("transfer", async (ctx) => {
+// ─── ACTION: 💳 SUPERMONEY CARD ────────────────────────────────────────────
+async function handleCardQuery(ctx) {
   const chatId = ctx.chat.id;
   const userId = await getUserIdByChatId(chatId);
-  if (!userId) return ctx.reply("⚠️ Link account first using `/link YOUR_USER_ID`.");
-
-  const text = ctx.message.text.replace("/transfer", "").trim();
-  const parts = text.split(/\s+/);
-  if (parts.length < 3) {
-    return ctx.reply(
-      "💡 *Usage:* `/transfer <amount> <from_account> <to_account>`\n\n" +
-      "• Example: `/transfer 5000 SBI HDFC`\n" +
-      "• Example: `/transfer 2000 SBI Cash`\n" +
-      "• Or just type in natural language: _'Transferred ₹2,000 from SBI to Cash in Hand'_",
-      { parse_mode: "Markdown", ...mainMenu }
-    );
-  }
-
-  const amount = Number(parts[0]);
-  const fromAccount = parts[1];
-  const toAccount = parts.slice(2).join(" ");
+  if (!userId) return ctx.reply("⚠️ Link account first.");
 
   try {
-    const res = await logTransfer(userId, { amount, fromAccount, toAccount });
-    const reply = `🔄 *Transfer Recorded!*\n\n` +
-      `💰 *Amount:* ₹${res.amount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}\n` +
-      `📤 *From:* 🏦 ${res.fromAccountName} (Bal: ₹${res.fromNewBalance.toLocaleString("en-IN", { minimumFractionDigits: 2 })})\n` +
-      `📥 *To:* 🏦 ${res.toAccountName} (Bal: ₹${res.toNewBalance.toLocaleString("en-IN", { minimumFractionDigits: 2 })})\n\n` +
-      `_Synced across your OrbitLife App in real time!_`;
-    return ctx.reply(reply, { parse_mode: "Markdown", ...postActionChips });
-  } catch (err) {
-    return ctx.reply(`❌ *Transfer Error:* ${err.message}`, { parse_mode: "Markdown" });
-  }
-});
+    const data = await getBalances(userId);
+    if (!data || !data.creditCard) return ctx.reply("💳 No Credit Card linked yet.");
 
-// ─── ACTION: 🏦 ADD ACCOUNT (e.g. Cash in Hand) ────────────────────────────
-bot.command("addaccount", async (ctx) => {
+    const card = data.creditCard;
+    const utilPct = card.limit > 0 ? Math.round((card.used / card.limit) * 100) : 0;
+    const reply = `💳 *${card.name}*\n\n` +
+      `🔴 *Used / Due Amount:* ₹${card.used.toLocaleString("en-IN", { minimumFractionDigits: 2 })}\n` +
+      `🟢 *Available Limit:* ₹${card.available.toLocaleString("en-IN", { minimumFractionDigits: 2 })}\n` +
+      `💳 *Total Limit:* ₹${card.limit.toLocaleString("en-IN", { minimumFractionDigits: 2 })}\n` +
+      `📊 *Utilization:* *${utilPct}%* ${utilPct > 50 ? "⚠️ (High)" : "✅ (Healthy)"}\n` +
+      `📅 *Due Date:* Day ${card.dueDateDay} of every month\n\n` +
+      `💡 _Pay bill anytime by typing:_ "Paid ₹${card.used.toFixed(0)} credit card bill from SBI"`;
+
+    await ctx.reply(reply, { parse_mode: "Markdown" });
+  } catch (err) {
+    await ctx.reply(`❌ Error: ${err.message}`);
+  }
+}
+bot.command("card", handleCardQuery);
+bot.hears("💳 Supermoney Card", handleCardQuery);
+
+// ─── ACTION: 🎯 GOALS & BUDGETS ─────────────────────────────────────────────
+async function handleGoalsAndBudgetsQuery(ctx) {
   const chatId = ctx.chat.id;
   const userId = await getUserIdByChatId(chatId);
-  if (!userId) return ctx.reply("⚠️ Link account first using `/link YOUR_USER_ID`.");
-
-  const text = ctx.message.text.replace("/addaccount", "").trim();
-  const parts = text.split(/\s+/);
-  if (parts.length < 1 || !text) {
-    return ctx.reply(
-      "💡 *Usage:* `/addaccount <Account Name> <Initial Balance>`\n\n" +
-      "• Example: `/addaccount Cash in Hand 2000`\n" +
-      "• Example: `/addaccount HDFC Bank 25000`",
-      { parse_mode: "Markdown", ...mainMenu }
-    );
-  }
-
-  const lastPart = parts[parts.length - 1];
-  let balance = 0;
-  let name = text;
-  if (!isNaN(Number(lastPart))) {
-    balance = Number(lastPart);
-    name = parts.slice(0, -1).join(" ");
-  }
+  if (!userId) return ctx.reply("⚠️ Link account first.");
 
   try {
-    const res = await addAccount(userId, { name, balance });
-    const reply = `🏦 *Account ${res.isNew ? "Created" : "Updated"}!*\n\n` +
-      `📌 *Name:* ${res.name}\n` +
-      `💰 *Balance:* ₹${res.balance.toLocaleString("en-IN", { minimumFractionDigits: 2 })}\n\n` +
-      `_Available for spends and bank transfers!_`;
-    return ctx.reply(reply, { parse_mode: "Markdown", ...postActionChips });
-  } catch (err) {
-    return ctx.reply(`❌ *Error:* ${err.message}`, { parse_mode: "Markdown" });
-  }
-});
+    const userData = await getUserData(userId);
+    const prefs = await getPreferences(userId);
+    const goals = userData?.goals || [];
 
-// ─── ACTION: 🏦 SET / CORRECT ACCOUNT BALANCE ─────────────────────────────
+    let msg = `🎯 *Your Financial Goals & Budget Limits*\n\n`;
+
+    if (goals.length > 0) {
+      msg += `🎯 *Active Goals:*\n`;
+      goals.forEach((g) => {
+        const cur = Number(g.currentAmount || 0);
+        const tgt = Number(g.targetAmount || 1);
+        const pct = Math.round((cur / tgt) * 100);
+        msg += `• *${g.name}:* ₹${cur.toLocaleString("en-IN")} / ₹${tgt.toLocaleString("en-IN")} (${pct}%)\n`;
+      });
+      msg += "\n";
+    } else {
+      msg += `🎯 *Goals:* None active. (Add with: _'Save 30,000 for Goa by Dec'_)\n\n`;
+    }
+
+    msg += `📊 *Monthly Category Budgets:*\n`;
+    const catBudgets = prefs.categoryBudgets || {};
+    for (const cat in catBudgets) {
+      msg += `• *${cat.toUpperCase()}:* ₹${Number(catBudgets[cat]).toLocaleString("en-IN")}\n`;
+    }
+
+    msg += `\n🛡️ *Emergency Buffer Target:* ₹${Number(prefs.emergencyBufferTarget || 2000).toLocaleString("en-IN")}\n` +
+      `📅 *Salary Day:* Day ${prefs.salaryDayOfMonth} (Expected: ₹${Number(prefs.expectedMonthlySalary || 29600).toLocaleString("en-IN")})`;
+
+    await ctx.reply(msg, { parse_mode: "Markdown" });
+  } catch (err) {
+    await ctx.reply(`❌ *Error:* ${err.message}`);
+  }
+}
+bot.command("goals", handleGoalsAndBudgetsQuery);
+bot.hears("🎯 Goals & Budgets", handleGoalsAndBudgetsQuery);
+
+// ─── ACTION: 🤝 DEBTS & EMIS ────────────────────────────────────────────────
+async function handleEmisQuery(ctx) {
+  const chatId = ctx.chat.id;
+  const userId = await getUserIdByChatId(chatId);
+  if (!userId) return ctx.reply("⚠️ Link account first.");
+
+  try {
+    const data = await getEmisAndDebts(userId);
+    if (!data || data.emis.length === 0) {
+      return ctx.reply("📑 *No active EMIs or loans!*");
+    }
+
+    let reply = `📑 *Your Active EMIs & Loans*\n\n`;
+    for (const emi of data.emis) {
+      reply += `• *${emi.title}:* ₹${emi.monthlyEmi.toLocaleString("en-IN")}/mo\n` +
+        `  _Paid: ${emi.paidMonths}/${emi.totalMonths} months (${emi.remainingMonths} remaining)_\n` +
+        `  _Pending: ₹${emi.pendingAmount.toLocaleString("en-IN")}_\n\n`;
+    }
+    reply += `💡 _Mark payment by typing:_ "Paid College EMI ₹3,750 from SBI"`;
+    await ctx.reply(reply, { parse_mode: "Markdown" });
+  } catch (err) {
+    await ctx.reply(`❌ Error: ${err.message}`);
+  }
+}
+bot.command("emis", handleEmisQuery);
+
+async function handleDebtsQuery(ctx) {
+  const chatId = ctx.chat.id;
+  const userId = await getUserIdByChatId(chatId);
+  if (!userId) return ctx.reply("⚠️ Link account first.");
+
+  try {
+    const data = await getEmisAndDebts(userId);
+    if (!data || data.borrowLends.length === 0) {
+      return ctx.reply("🤝 *No active borrow/lend records!* All settled.");
+    }
+
+    let reply = `🤝 *Active Borrow & Lend Records*\n\n`;
+    for (const d of data.borrowLends) {
+      reply += `• *${d.personName}* (${d.type}): *₹${d.amount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}* ${d.phoneNumber ? `(${d.phoneNumber})` : ""}\n`;
+      if (d.originalAmount && d.paidAmount) {
+        reply += `  _(Lent: ₹${d.originalAmount.toLocaleString("en-IN")} | Repaid: ₹${d.paidAmount.toLocaleString("en-IN")})_\n`;
+      }
+    }
+    reply += `\n💡 _When someone repays, send:_ "${data.borrowLends[0]?.personName || "Person"} paid 2500 to SBI"`;
+    await ctx.reply(reply, { parse_mode: "Markdown" });
+  } catch (err) {
+    await ctx.reply(`❌ Error: ${err.message}`);
+  }
+}
+bot.command("debts", handleDebtsQuery);
+
+// ─── COMMAND: /setbalance ──────────────────────────────────────────────────
 bot.command("setbalance", async (ctx) => {
   const chatId = ctx.chat.id;
   const userId = await getUserIdByChatId(chatId);
@@ -335,9 +456,8 @@ bot.command("setbalance", async (ctx) => {
       "💡 *Usage:* `/setbalance <Account Name> <New Balance>`\n\n" +
       "• Example: `/setbalance SBI 3312.60`\n" +
       "• Example: `/setbalance HDFC 1500`\n" +
-      "• Example: `/setbalance Cash 500`\n" +
-      "• Or just type: _'Set SBI balance to 3312.60'_",
-      { parse_mode: "Markdown", ...mainMenu }
+      "• Example: `/setbalance Cash 500`",
+      { parse_mode: "Markdown" }
     );
   }
 
@@ -352,13 +472,13 @@ bot.command("setbalance", async (ctx) => {
       `✅ *New Live Balance:* ₹${res.newBalance.toLocaleString("en-IN", { minimumFractionDigits: 2 })}\n` +
       `📊 *Adjustment:* ${res.difference >= 0 ? "+" : "-"}₹${Math.abs(res.difference).toLocaleString("en-IN", { minimumFractionDigits: 2 })}\n\n` +
       `_Synced across your OrbitLife App in real time!_`;
-    return ctx.reply(reply, { parse_mode: "Markdown", ...postActionChips });
+    return ctx.reply(reply, { parse_mode: "Markdown" });
   } catch (err) {
     return ctx.reply(`❌ *Error:* ${err.message}`, { parse_mode: "Markdown" });
   }
 });
 
-// ─── ACTION: ↩️ UNDO LAST TRANSACTION ──────────────────────────────────────
+// ─── COMMAND: /undo ────────────────────────────────────────────────────────
 bot.command("undo", async (ctx) => {
   const chatId = ctx.chat.id;
   const userId = await getUserIdByChatId(chatId);
@@ -371,13 +491,13 @@ bot.command("undo", async (ctx) => {
       `💰 *Amount:* ₹${res.amount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}\n` +
       (res.restoredBalance !== null ? `🏦 *${res.restoredAccountName} Restored Balance:* ₹${res.restoredBalance.toLocaleString("en-IN", { minimumFractionDigits: 2 })}\n\n` : "\n") +
       `_Synced across your OrbitLife App in real time!_`;
-    return ctx.reply(reply, { parse_mode: "Markdown", ...postActionChips });
+    return ctx.reply(reply, { parse_mode: "Markdown" });
   } catch (err) {
     return ctx.reply(`❌ *Undo Error:* ${err.message}`, { parse_mode: "Markdown" });
   }
 });
 
-// ─── ACTION: 📜 RECENT TRANSACTIONS ────────────────────────────────────────
+// ─── COMMAND: /recent or /transactions ─────────────────────────────────────
 async function handleRecentTransactions(ctx) {
   const chatId = ctx.chat.id;
   const userId = await getUserIdByChatId(chatId);
@@ -386,7 +506,7 @@ async function handleRecentTransactions(ctx) {
   try {
     const list = await getRecentTransactions(userId, 5);
     if (list.length === 0) {
-      return ctx.reply("📝 No recent transactions found.", { ...mainMenu });
+      return ctx.reply("📝 No recent transactions found.");
     }
 
     let text = `📜 *Recent 5 Transactions:*\n\n`;
@@ -426,180 +546,51 @@ bot.action(/^undo_(.+)$/, async (ctx) => {
       `💰 *Amount:* ₹${res.amount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}\n` +
       (res.restoredBalance !== null ? `🏦 *${res.restoredAccountName} Restored Balance:* ₹${res.restoredBalance.toLocaleString("en-IN", { minimumFractionDigits: 2 })}\n\n` : "\n") +
       `_Synced across your OrbitLife App in real time!_`;
-    return ctx.reply(reply, { parse_mode: "Markdown", ...postActionChips });
+    return ctx.reply(reply, { parse_mode: "Markdown" });
   } catch (err) {
     return ctx.answerCbQuery(`Error: ${err.message}`);
   }
 });
 
-// ─── ACTION: 💳 SUPERMONEY CARD ────────────────────────────────────────────
-async function handleCardQuery(ctx) {
-  const chatId = ctx.chat.id;
-  const userId = await getUserIdByChatId(chatId);
-  if (!userId) return ctx.reply("⚠️ Link account first.");
+// ─── COMMAND: /help ─────────────────────────────────────────────────────────
+bot.command("help", async (ctx) => {
+  const msg = `💡 *OrbitLife AI Personal CFO Cheatsheet (₹ INR)*\n\n` +
+    `*1. Financial Intelligence & Decisions:*\n` +
+    `• _"Can I afford ₹4,999 headphones?"_\n` +
+    `• _"How much can I safely spend today?"_\n` +
+    `• _"What if I spend ₹5,000 today?"_\n` +
+    `• _/safetospend - Calculate safe daily limits_\n` +
+    `• _/forecast - 30-day forward cash flow_\n` +
+    `• _/health - Check 0-100 financial health score_\n\n` +
+    `*2. Spends & Incomes:*\n` +
+    `• _"Spent ₹350 on lunch with UPI"_\n` +
+    `• _"Received ₹29,600 salary"_\n` +
+    `• _/undo - Revert last action & restore balance_\n\n` +
+    `*3. Credit Card & EMIs:*\n` +
+    `• _"Paid ₹2,920 credit card bill from SBI"_\n` +
+    `• _"Paid College EMI ₹3,750"_\n` +
+    `• _/card - Check limit & utilization_\n` +
+    `• _/emis - Check loans & tenure_\n\n` +
+    `*4. Borrow & Lend:*\n` +
+    `• _"Shamveel paid remaining ₹2,500 to SBI"_\n` +
+    `• _"Lent ₹2,000 to Rahul"_\n` +
+    `• _/debts - View active debt balances_\n\n` +
+    `*5. Multimodal Vision & Voice:*\n` +
+    `• 🎙️ Send any Voice Message to log or ask questions!\n` +
+    `• 🧾 Snap any receipt or payment screenshot!`;
 
-  try {
-    const userData = await getUserData(userId);
-    const cc = userData?.creditCardAccount;
-    const fds = userData?.fdLots || [];
-
-    if (!cc) {
-      return ctx.reply("ℹ️ No Credit Card found in your profile.");
-    }
-
-    const totalFd = fds.reduce((sum, f) => sum + (Number(f.currentValue || f.principal) || 0), 0);
-
-    const reply = `💳 *${cc.name || "Supermoney Secured Credit Card"}*\n\n` +
-      `• *Total Credit Limit:* ₹${Number(cc.creditLimit || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}\n` +
-      `• *Available Credit:* ₹${Number(cc.availableCredit || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}\n` +
-      `• *Current Used:* ₹${Number(cc.usedCredit || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}\n\n` +
-      `📅 *Bill Cycle:* Statement on *${cc.statementDateDay || 1}st*, Due on *${cc.dueDateDay || 15}th*\n` +
-      `🔒 *Backed by FD:* ₹${totalFd.toLocaleString("en-IN", { minimumFractionDigits: 2 })}\n\n` +
-      `💡 _To log a spend:_ "Spent ₹500 on card"\n` +
-      `💡 _To pay bill:_ "Paid ₹5000 credit card bill"`;
-
-    await ctx.reply(reply, { parse_mode: "Markdown", ...mainMenu });
-  } catch (err) {
-    await ctx.reply(`❌ Error: ${err.message}`);
-  }
-}
-bot.command("card", handleCardQuery);
-bot.hears("💳 Supermoney Card", handleCardQuery);
-
-// ─── ACTION: 📑 ACTIVE EMIS ────────────────────────────────────────────────
-async function handleEmisQuery(ctx) {
-  const chatId = ctx.chat.id;
-  const userId = await getUserIdByChatId(chatId);
-  if (!userId) return ctx.reply("⚠️ Link account first.");
-
-  try {
-    const data = await getEmisAndDebts(userId);
-    if (!data || data.emis.length === 0) {
-      return ctx.reply("🎉 *No active EMIs!* You are completely EMI-free.");
-    }
-
-    let totalMonthly = 0;
-    let totalPendingDebt = 0;
-    let totalPaidDebt = 0;
-    let reply = `📑 *ORBITLIFE ACTIVE EMIs & LOAN TRACKER*\n` +
-      `━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
-
-    const emiButtons = [];
-
-    for (const emi of data.emis) {
-      totalMonthly += emi.monthlyEmi;
-      totalPendingDebt += emi.pendingAmount;
-      totalPaidDebt += emi.paidAmount;
-
-      const progressPercent = emi.totalAmount > 0 ? Math.round((emi.paidAmount / emi.totalAmount) * 100) : 0;
-
-      reply += `📌 *${emi.title}*\n` +
-        `• 💵 *Monthly EMI:* ₹${emi.monthlyEmi.toLocaleString("en-IN", { minimumFractionDigits: 2 })} / month\n` +
-        `• ⏳ *Tenure Left:* *${emi.remainingMonths} months* (out of ${emi.totalMonths})\n` +
-        `• 💰 *Total Pending:* ₹${emi.pendingAmount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}\n` +
-        `• 📊 *Progress:* ${progressPercent}% paid (₹${emi.paidAmount.toLocaleString("en-IN")} / ₹${emi.totalAmount.toLocaleString("en-IN")})\n\n`;
-
-      if (!emi.isPaid) {
-        emiButtons.push([
-          Markup.button.callback(`✅ Pay ${emi.title} (₹${emi.monthlyEmi.toLocaleString("en-IN")})`, `pay_emi_${emi.title}`),
-        ]);
-      }
-    }
-
-    reply += `━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
-      `💸 *Total Monthly EMI Burden:* *₹${totalMonthly.toLocaleString("en-IN", { minimumFractionDigits: 2 })} / month*\n` +
-      `🏦 *Total Outstanding Debt:* *₹${totalPendingDebt.toLocaleString("en-IN", { minimumFractionDigits: 2 })}*\n\n` +
-      `💡 _Tap any button below to record this month's payment:_`;
-
-    emiButtons.push([
-      Markup.button.callback("🏦 View Balance", "quick_balance"),
-      Markup.button.callback("🎯 Scorecard", "quick_scorecard"),
-    ]);
-
-    await ctx.reply(reply, { parse_mode: "Markdown", ...Markup.inlineKeyboard(emiButtons) });
-  } catch (err) {
-    await ctx.reply(`❌ Error: ${err.message}`);
-  }
-}
-bot.command("emis", handleEmisQuery);
-bot.hears("📑 Active EMIs", handleEmisQuery);
-
-// ─── ACTION: 🤝 BORROW & LEND ──────────────────────────────────────────────
-async function handleDebtsQuery(ctx) {
-  const chatId = ctx.chat.id;
-  const userId = await getUserIdByChatId(chatId);
-  if (!userId) return ctx.reply("⚠️ Link account first.");
-
-  try {
-    const data = await getEmisAndDebts(userId);
-    if (!data || data.borrowLends.length === 0) {
-      return ctx.reply("🤝 *No active borrow/lend records!* All settled.");
-    }
-
-    let reply = `🤝 *Active Borrow & Lend Records*\n\n`;
-    for (const d of data.borrowLends) {
-      reply += `• *${d.personName}* (${d.type}): *₹${d.amount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}* ${d.phoneNumber ? `(${d.phoneNumber})` : ""}\n`;
-    }
-
-    reply += `\n💡 _When someone repays, send:_ "${data.borrowLends[0]?.personName || "Person"} paid back ₹5,000"`;
-
-    await ctx.reply(reply, { parse_mode: "Markdown", ...mainMenu });
-  } catch (err) {
-    await ctx.reply(`❌ Error: ${err.message}`);
-  }
-}
-bot.command("debts", handleDebtsQuery);
-bot.hears("🤝 Borrow & Lend", handleDebtsQuery);
-
-// ─── INLINE BUTTON CALLBACKS ────────────────────────────────────────────────
-bot.action("quick_balance", async (ctx) => {
-  await ctx.answerCbQuery();
-  return handleBalanceQuery(ctx);
+  await ctx.reply(msg, { parse_mode: "Markdown" });
 });
+bot.hears("❓ Help & Commands", (ctx) => ctx.telegram.sendMessage(ctx.chat.id, "/help"));
+bot.hears("📸 Scan Receipt", (ctx) => ctx.reply("📸 *Snap a photo of any receipt, bill, or payment screenshot!*", { parse_mode: "Markdown" }));
 
-bot.action("quick_scorecard", async (ctx) => {
-  await ctx.answerCbQuery();
-  return handleDailyScorecard(ctx);
-});
-
-bot.action("quick_card", async (ctx) => {
-  await ctx.answerCbQuery();
-  return handleCardQuery(ctx);
-});
-
-bot.action("quick_emis", async (ctx) => {
-  await ctx.answerCbQuery();
-  return handleEmisQuery(ctx);
-});
-
-bot.action(/^pay_emi_(.+)$/, async (ctx) => {
-  await ctx.answerCbQuery();
-  const emiName = ctx.match[1];
-  const chatId = ctx.chat.id;
-  const userId = await getUserIdByChatId(chatId);
-  if (!userId) return ctx.reply("⚠️ Link account first.");
-
-  try {
-    const res = await payEmi(userId, { emiName });
-    const reply = `✅ *EMI Payment Recorded!*\n\n` +
-      `📌 *Loan:* ${res.emiTitle}\n` +
-      `💰 *Amount Deducted:* ₹${res.amountPaid.toLocaleString("en-IN", { minimumFractionDigits: 2 })}\n` +
-      `📅 *Tenure Progress:* ${res.paidMonths} months paid\n` +
-      `⏳ *Remaining:* *${res.remainingMonths} months left*\n\n` +
-      `_Deduction synced to your OrbitLife App in real time!_`;
-    return ctx.reply(reply, { parse_mode: "Markdown", ...postActionChips });
-  } catch (err) {
-    return ctx.reply(`❌ *Payment Error:* ${err.message}`);
-  }
-});
-
-// ─── PHOTO HANDLER ──────────────────────────────────────────────────────────
+// ─── PHOTO HANDLER (Receipt OCR & Food Vision) ──────────────────────────────
 bot.on("photo", async (ctx) => {
   const chatId = ctx.chat.id;
   const userId = await getUserIdByChatId(chatId);
   if (!userId) return ctx.reply("⚠️ Please link your OrbitLife account first using `/link <USER_ID>`.");
 
-  const statusMsg = await ctx.reply("🔍 *Analyzing photo with Gemini Vision AI...*", { parse_mode: "Markdown" });
+  const statusMsg = await ctx.reply("🔍 *Analyzing image with Gemini Vision AI...*", { parse_mode: "Markdown" });
 
   try {
     const photos = ctx.message.photo;
@@ -623,74 +614,192 @@ bot.on("photo", async (ctx) => {
       });
 
       let reply = `🧾 *Receipt Processed & Logged!*\n\n` +
-        `🏪 *Store:* ${merchant || "Unknown"}\n` +
-        `💰 *Total Amount:* ₹${expense.amount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}\n` +
-        `📁 *Category:* ${expense.categoryId}\n`;
+        `🏪 *Merchant:* ${merchant || "Store"}\n` +
+        `💰 *Total Amount:* ₹${(amount || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}\n` +
+        `📁 *Category:* ${expense.categoryId}\n` +
+        `📅 *Date:* ${expense.date}\n`;
 
       if (items && items.length > 0) {
-        reply += `\n*Items Found:*\n` + items.slice(0, 5).map((i) => `• ${i.name} (₹${i.price || ""})`).join("\n");
+        reply += `\n🛒 *Items Extracted:*\n`;
+        items.slice(0, 5).forEach((it) => {
+          reply += `• ${it.name} — ₹${(it.price || 0).toLocaleString("en-IN")}\n`;
+        });
       }
 
-      await ctx.telegram.editMessageText(chatId, statusMsg.message_id, null, reply, { parse_mode: "Markdown", ...postActionChips });
-    } else if (analysis.type === "MEAL") {
-      const { name, calories, protein, carbs, fat, mealType } = analysis.data;
-      const meal = await logMeal(userId, {
-        name: name || "Meal",
-        calories: calories || 0,
-        protein: protein || 0,
-        carbs: carbs || 0,
-        fat: fat || 0,
-        mealType: mealType || "Meal",
+      return ctx.reply(reply, {
+        parse_mode: "Markdown",
+        ...Markup.inlineKeyboard([[Markup.button.callback("↩️ Undo This", `undo_${expense.id}`)]]),
       });
-
-      const reply = `🥗 *Meal Analyzed & Logged!*\n\n` +
-        `🍽️ *Dish:* ${meal.name}\n` +
-        `🔥 *Calories:* ${meal.calories} kcal\n` +
-        `🥩 *Protein:* ${meal.protein}g | 🍚 *Carbs:* ${meal.carbs}g | 🥑 *Fat:* ${meal.fat}g`;
-
-      await ctx.telegram.editMessageText(chatId, statusMsg.message_id, null, reply, { parse_mode: "Markdown", ...postActionChips });
-    } else {
-      await ctx.telegram.editMessageText(chatId, statusMsg.message_id, null, "📸 Image received, but could not detect a receipt or meal.", { parse_mode: "Markdown" });
     }
+
+    if (analysis.type === "MEAL") {
+      const meal = await logMeal(userId, analysis.data);
+      return ctx.reply(
+        `🥗 *Food Picture Analyzed!*\n\n` +
+        `🍽️ *Food:* ${meal.name}\n` +
+        `🔥 *Calories:* ${meal.calories} kcal\n` +
+        `🥩 *Protein:* ${meal.protein}g | 🍚 *Carbs:* ${meal.carbs}g | 🥑 *Fat:* ${meal.fat}g`,
+        { parse_mode: "Markdown" }
+      );
+    }
+
+    return ctx.reply("🤖 Image processed, but couldn't detect a clear receipt or meal. Please try again with better lighting.");
   } catch (err) {
-    await ctx.telegram.editMessageText(chatId, statusMsg.message_id, null, `❌ *Error:* ${err.message}`, { parse_mode: "Markdown" });
+    return ctx.reply(`❌ *Image Processing Error:* ${err.message}`);
   }
 });
 
-// ─── NATURAL LANGUAGE TEXT MESSAGE HANDLER ──────────────────────────────────
+// ─── VOICE HANDLER (Whisper Speech-To-Text & Audio AI) ──────────────────────
+bot.on(["voice", "audio"], async (ctx) => {
+  const chatId = ctx.chat.id;
+  const userId = await getUserIdByChatId(chatId);
+  if (!userId) return ctx.reply("⚠️ Link account first using `/link YOUR_USER_ID`.");
+
+  const statusMsg = await ctx.reply("🎙️ *Processing voice note with Whisper AI...*", { parse_mode: "Markdown" });
+
+  try {
+    const fileId = ctx.message.voice ? ctx.message.voice.file_id : ctx.message.audio.file_id;
+    const fileLink = await ctx.telegram.getFileLink(fileId);
+    const response = await axios.get(fileLink.href, { responseType: "arraybuffer" });
+    const audioBuffer = Buffer.from(response.data);
+
+    const transcribedText = await transcribeAudio(audioBuffer, "audio/ogg");
+    if (!transcribedText) {
+      return ctx.reply("⚠️ Could not recognize speech. Please try speaking closer to the microphone.");
+    }
+
+    await ctx.reply(`🗣️ _"${transcribedText}"_`, { parse_mode: "Markdown" });
+    return await handleFinancialIntent(ctx, userId, transcribedText);
+  } catch (err) {
+    return ctx.reply(`❌ *Voice Processing Error:* ${err.message}`);
+  }
+});
+
+// ─── TEXT MESSAGE HANDLER (Natural Language Personal CFO) ───────────────────
 bot.on("text", async (ctx) => {
+  const chatId = ctx.chat.id;
   const text = ctx.message.text.trim();
   if (text.startsWith("/")) return;
 
-  const chatId = ctx.chat.id;
+  const lockKey = `msg_${chatId}_${ctx.message.message_id}`;
+  if (!acquireIdempotencyLock(lockKey)) {
+    return;
+  }
+
   const userId = await getUserIdByChatId(chatId);
-  if (!userId) return ctx.reply("⚠️ Please connect with `/link YOUR_USER_ID` first.", { parse_mode: "Markdown" });
+  if (!userId) {
+    return ctx.reply("⚠️ Please link your account first using `/link <YOUR_USER_ID>`.");
+  }
 
-  await ctx.sendChatAction("typing");
+  return await handleFinancialIntent(ctx, userId, text);
+});
 
+/**
+ * Central Financial Intent Handler
+ */
+async function handleFinancialIntent(ctx, userId, text) {
   try {
+    const userData = await getUserData(userId);
     const parsed = await parseTextMessage(text);
 
-    // 1. ONBOARDING
-    if (parsed.intent === "ONBOARDING") {
-      const stats = await saveOnboardingProfile(userId, parsed.data);
-      const reply = `🎉 *Financial Profile Setup Completed!*\n\n` +
-        `🏦 *Bank/Cash Accounts Created:* ${stats.accountsCount}\n` +
-        `💵 *Incomes Logged:* ${stats.incomesCount}\n` +
-        `🔄 *Recurring Bills Configured:* ${stats.expensesCount}\n` +
-        `📑 *Active EMIs Tracked:* ${stats.emisCount}\n` +
-        `🤝 *Borrow/Lend Records:* ${stats.borrowLendsCount}\n` +
-        `🎯 *Financial Goals Set:* ${stats.goalsCount}\n` +
-        `💳 *Credit Card Linked:* ${stats.hasCreditCard ? "Yes ✅ (Supermoney)" : "None"}\n\n` +
-        `✨ *All data is live in your OrbitLife App!*`;
+    // 1. CAN I AFFORD THIS?
+    if (parsed.intent === "CAN_I_AFFORD") {
+      const { amount, itemName, category } = parsed.data;
+      const res = canIAfford(userData, { amount, itemName, category });
 
-      return ctx.reply(reply, { parse_mode: "Markdown", ...postActionChips });
+      const msg = `${res.verdictEmoji} *${res.verdictTitle}*\n\n` +
+        `🛍️ *Purchase:* ${res.itemName || "Item"} (₹${(res.purchaseAmount || 0).toLocaleString("en-IN")})\n` +
+        `💰 *Discretionary Surplus:* ₹${(res.discretionaryBalance || 0).toLocaleString("en-IN")}\n` +
+        `📅 *Days Until Salary:* ${res.daysUntilSalary} days\n\n` +
+        `📊 *CFO Impact:*\n` + (res.impact || []).map((i) => `• ${i}`).join("\n") + "\n\n" +
+        `💡 *Recommendation:*\n_${res.recommendation}_`;
+
+      return ctx.reply(msg, { parse_mode: "Markdown" });
     }
 
-    // 2. MARK EMI PAID
+    // 2. WHAT-IF SCENARIO SIMULATION
+    if (parsed.intent === "WHAT_IF") {
+      const sim = simulateScenario(userData, parsed.data);
+      const msg = `🔮 *OrbitLife Scenario Simulation*\n\n` +
+        `📝 *Scenario:* _${sim.summaryText}_\n\n` +
+        `📊 *Before vs After Simulation:*\n` +
+        `• Liquid Cash: ₹${sim.current.liquidMoney.toLocaleString("en-IN")} ➔ *₹${sim.simulated.liquidMoney.toLocaleString("en-IN")}*\n` +
+        `• Safe Daily Spend: ₹${sim.current.safeDaily.toLocaleString("en-IN")} ➔ *₹${sim.simulated.safeDaily.toLocaleString("en-IN")}/day*\n` +
+        `• Risk Level: ${sim.impact.riskChange}\n\n` +
+        `💡 *CFO Verdict:*\n${sim.recommendation}\n\n` +
+        `🔒 _Zero-risk simulation. No actual account data was modified._`;
+
+      return ctx.reply(msg, { parse_mode: "Markdown" });
+    }
+
+    // 3. SAFE TO SPEND
+    if (parsed.intent === "SAFE_TO_SPEND") {
+      return handleSafeToSpendQuery(ctx);
+    }
+
+    // 4. CASH FLOW FORECAST
+    if (parsed.intent === "CASH_FLOW_FORECAST") {
+      return handleForecastQuery(ctx);
+    }
+
+    // 5. DAILY BRIEFING
+    if (parsed.intent === "DAILY_BRIEFING") {
+      return handleBriefingQuery(ctx);
+    }
+
+    // 6. WEEKLY REVIEW
+    if (parsed.intent === "WEEKLY_REVIEW") {
+      return handleWeeklyReviewQuery(ctx);
+    }
+
+    // 7. FINANCIAL HEALTH SCORE
+    if (parsed.intent === "FINANCIAL_HEALTH") {
+      return handleHealthScoreQuery(ctx);
+    }
+
+    // 8. SET PREFERENCE / GOAL
+    if (parsed.intent === "SET_PREFERENCE") {
+      const updated = await updatePreferences(userId, parsed.data);
+      return ctx.reply(
+        `⚙️ *Financial Preference Saved!*\n\n` +
+        `• Expected Salary: ₹${Number(updated.expectedMonthlySalary).toLocaleString("en-IN")}\n` +
+        `• Salary Day: Day ${updated.salaryDayOfMonth}\n` +
+        `• Emergency Buffer: ₹${Number(updated.emergencyBufferTarget).toLocaleString("en-IN")}\n` +
+        `• Minimum Savings: ₹${Number(updated.minimumMonthlySavings).toLocaleString("en-IN")}\n\n` +
+        `_Orbit will calibrate all safe-to-spend calculations with these rules._`,
+        { parse_mode: "Markdown" }
+      );
+    }
+
+    if (parsed.intent === "SET_GOAL") {
+      const goal = await setGoal(userId, parsed.data);
+      return ctx.reply(
+        `🎯 *New Goal Created!*\n\n` +
+        `📌 *Goal:* ${goal.name}\n` +
+        `💰 *Target:* ₹${goal.targetAmount.toLocaleString("en-IN")}\n` +
+        `📈 *Monthly Allocation:* ₹${goal.monthlyContribution.toLocaleString("en-IN")}/mo\n\n` +
+        `_Protected in your daily safe-to-spend calculations!_`,
+        { parse_mode: "Markdown" }
+      );
+    }
+
+    // 9. ALERTS
+    if (parsed.intent === "ALERTS") {
+      const alerts = evaluateAlerts(userData);
+      if (alerts.length === 0) {
+        return ctx.reply("🟢 *All Clear!* No financial risks or overdue obligations detected.", { parse_mode: "Markdown" });
+      }
+      let alertMsg = `⚠️ *Active Financial Alerts:*\n\n`;
+      alerts.forEach((a) => {
+        alertMsg += `${a.icon} *[${a.priority}] ${a.title}*\n${a.message}\n\n`;
+      });
+      return ctx.reply(alertMsg, { parse_mode: "Markdown" });
+    }
+
+    // 10. PAY EMI
     if (parsed.intent === "PAY_EMI") {
       const { emiName, amount, account } = parsed.data;
-      const res = await payEmi(userId, { emiName: emiName || "EMI", amount, accountName: account });
+      const res = await payEmi(userId, { emiTitle: emiName, amount, accountName: account });
       const reply = `✅ *EMI Payment Recorded!*\n\n` +
         `📌 *Loan:* ${res.emiTitle}\n` +
         `💰 *Amount Paid:* ₹${res.amountPaid.toLocaleString("en-IN", { minimumFractionDigits: 2 })}\n` +
@@ -698,10 +807,10 @@ bot.on("text", async (ctx) => {
         `📅 *Payments Made:* ${res.paidMonths} months\n` +
         `⏳ *Remaining Tenure:* ${res.remainingMonths} months left\n\n` +
         `_Deduction logged and synced to your app!_`;
-      return ctx.reply(reply, { parse_mode: "Markdown", ...postActionChips });
+      return ctx.reply(reply, { parse_mode: "Markdown" });
     }
 
-    // 3. DEBT REPAYMENT / SETTLEMENT OR NEW DEBT
+    // 11. DEBT UPDATE (Lend/Borrow Repayment)
     if (parsed.intent === "DEBT_UPDATE") {
       const res = await handleDebtUpdate(userId, {
         ...parsed.data,
@@ -716,18 +825,18 @@ bot.on("text", async (ctx) => {
           `📊 *Remaining Debt:* ₹${res.remainingDebt.toLocaleString("en-IN", { minimumFractionDigits: 2 })}\n` +
           `✨ *Status:* ${res.isSettled ? "Fully Settled 🎉" : "Partially Paid"}\n\n` +
           `_Synced across your OrbitLife App in real time!_`;
-        return ctx.reply(reply, { parse_mode: "Markdown", ...postActionChips });
+        return ctx.reply(reply, { parse_mode: "Markdown" });
       } else {
         const reply = `🤝 *New ${res.type === "borrow" ? "Borrow" : "Lend"} Record Added!*\n\n` +
           `👤 *Person:* ${res.personName}\n` +
           `💰 *Amount:* ₹${res.amount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}\n` +
           `📌 *Type:* ${res.type === "borrow" ? "You Borrowed" : "You Lent"}\n\n` +
           `_Synced across your OrbitLife App in real time!_`;
-        return ctx.reply(reply, { parse_mode: "Markdown", ...postActionChips });
+        return ctx.reply(reply, { parse_mode: "Markdown" });
       }
     }
 
-    // 4. PAY CREDIT CARD BILL
+    // 12. PAY CREDIT CARD BILL
     if (parsed.intent === "PAY_CARD_BILL") {
       const { amount, account } = parsed.data;
       const res = await payCreditCardBill(userId, { amount, accountName: account });
@@ -737,10 +846,10 @@ bot.on("text", async (ctx) => {
         `🟢 *Available Credit Restored:* ₹${res.newAvailableCredit.toLocaleString("en-IN", { minimumFractionDigits: 2 })}\n` +
         `🔴 *Remaining Used Credit:* ₹${res.newUsedCredit.toLocaleString("en-IN", { minimumFractionDigits: 2 })}\n\n` +
         `_Synced across your OrbitLife App in real time!_`;
-      return ctx.reply(reply, { parse_mode: "Markdown", ...postActionChips });
+      return ctx.reply(reply, { parse_mode: "Markdown" });
     }
 
-    // 5. TRANSFER (Bank to Bank, ATM withdrawal, Cash in Hand)
+    // 13. TRANSFER
     if (parsed.intent === "TRANSFER") {
       const { amount, fromAccount, toAccount, date, notes } = parsed.data;
       const res = await logTransfer(userId, {
@@ -755,21 +864,10 @@ bot.on("text", async (ctx) => {
         `📤 *From:* 🏦 ${res.fromAccountName} (Bal: ₹${res.fromNewBalance.toLocaleString("en-IN", { minimumFractionDigits: 2 })})\n` +
         `📥 *To:* 🏦 ${res.toAccountName} (Bal: ₹${res.toNewBalance.toLocaleString("en-IN", { minimumFractionDigits: 2 })})\n\n` +
         `_Synced across your OrbitLife App in real time!_`;
-      return ctx.reply(reply, { parse_mode: "Markdown", ...postActionChips });
+      return ctx.reply(reply, { parse_mode: "Markdown" });
     }
 
-    // 6. ADD_ACCOUNT (e.g. Cash in Hand)
-    if (parsed.intent === "ADD_ACCOUNT") {
-      const { name, balance } = parsed.data;
-      const res = await addAccount(userId, { name: name || "Cash in Hand", balance: balance || 0 });
-      const reply = `🏦 *Account ${res.isNew ? "Created" : "Updated"}!*\n\n` +
-        `📌 *Name:* ${res.name}\n` +
-        `💰 *Balance:* ₹${res.balance.toLocaleString("en-IN", { minimumFractionDigits: 2 })}\n\n` +
-        `_Available for spends and bank transfers!_`;
-      return ctx.reply(reply, { parse_mode: "Markdown", ...postActionChips });
-    }
-
-    // 5. EXPENSE
+    // 14. EXPENSE
     if (parsed.intent === "EXPENSE") {
       const exp = await logExpense(userId, {
         amount: parsed.data.amount,
@@ -782,14 +880,11 @@ bot.on("text", async (ctx) => {
       const reply = `💸 *Expense Logged!*\n\n📝 *Item:* ${exp.description}\n💰 *Amount:* ₹${exp.amount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}\n📁 *Category:* ${exp.categoryId}\n💳 *Account:* ${exp.accountId}`;
       return ctx.reply(reply, {
         parse_mode: "Markdown",
-        ...Markup.inlineKeyboard([
-          [Markup.button.callback("↩️ Undo This", `undo_${exp.id}`)],
-          ...postActionChips.reply_markup.inline_keyboard,
-        ])
+        ...Markup.inlineKeyboard([[Markup.button.callback("↩️ Undo This", `undo_${exp.id}`)]]),
       });
     }
 
-    // 6. INCOME
+    // 15. INCOME
     if (parsed.intent === "INCOME") {
       const inc = await logIncome(userId, {
         amount: parsed.data.amount,
@@ -800,14 +895,11 @@ bot.on("text", async (ctx) => {
       const reply = `🟢 *Income Logged!*\n\n💵 *Source:* ${inc.source}\n💰 *Amount:* ₹${inc.amount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}`;
       return ctx.reply(reply, {
         parse_mode: "Markdown",
-        ...Markup.inlineKeyboard([
-          [Markup.button.callback("↩️ Undo This", `undo_${inc.id}`)],
-          ...postActionChips.reply_markup.inline_keyboard,
-        ])
+        ...Markup.inlineKeyboard([[Markup.button.callback("↩️ Undo This", `undo_${inc.id}`)]]),
       });
     }
 
-    // 7. SET / EDIT ACCOUNT BALANCE
+    // 16. SET BALANCE
     if (parsed.intent === "SET_BALANCE") {
       const { accountName, balance } = parsed.data;
       const res = await setAccountBalance(userId, { accountName: accountName || "SBI", balance });
@@ -817,10 +909,10 @@ bot.on("text", async (ctx) => {
         `✅ *New Live Balance:* ₹${res.newBalance.toLocaleString("en-IN", { minimumFractionDigits: 2 })}\n` +
         `📊 *Adjustment:* ${res.difference >= 0 ? "+" : "-"}₹${Math.abs(res.difference).toLocaleString("en-IN", { minimumFractionDigits: 2 })}\n\n` +
         `_Synced across your OrbitLife App in real time!_`;
-      return ctx.reply(reply, { parse_mode: "Markdown", ...postActionChips });
+      return ctx.reply(reply, { parse_mode: "Markdown" });
     }
 
-    // 8. UNDO LAST ACTION
+    // 17. UNDO LAST
     if (parsed.intent === "UNDO") {
       const res = await undoLastTransaction(userId);
       const reply = `↩️ *Transaction Undone & Reverted!*\n\n` +
@@ -828,149 +920,47 @@ bot.on("text", async (ctx) => {
         `💰 *Amount:* ₹${res.amount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}\n` +
         (res.restoredBalance !== null ? `🏦 *${res.restoredAccountName} Restored Balance:* ₹${res.restoredBalance.toLocaleString("en-IN", { minimumFractionDigits: 2 })}\n\n` : "\n") +
         `_Synced across your OrbitLife App in real time!_`;
-      return ctx.reply(reply, { parse_mode: "Markdown", ...postActionChips });
+      return ctx.reply(reply, { parse_mode: "Markdown" });
     }
 
-    // 9. EDIT LAST TRANSACTION
-    if (parsed.intent === "EDIT_TRANSACTION") {
-      const res = await editLastTransaction(userId, parsed.data);
-      const reply = `✏️ *Transaction Updated & Corrected!*\n\n` +
-        `📝 *Item:* ${res.description}\n` +
-        `💰 *New Amount:* ₹${res.amount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}\n` +
-        `🏦 *Account:* ${res.account}\n` +
-        `📁 *Category:* ${res.category}\n\n` +
-        `_Account balances updated and synced!_`;
-      return ctx.reply(reply, { parse_mode: "Markdown", ...postActionChips });
-    }
-
-    // 10. MEAL
+    // 18. MEAL & MILEAGE
     if (parsed.intent === "MEAL") {
       const meal = await logMeal(userId, parsed.data);
-      return ctx.reply(`🥗 *Meal Logged!*\n\n🍽️ *Food:* ${meal.name}\n🔥 *Calories:* ${meal.calories} kcal\n🥩 *Protein:* ${meal.protein}g | 🍚 *Carbs:* ${meal.carbs}g | 🥑 *Fat:* ${meal.fat}g`, { parse_mode: "Markdown", ...postActionChips });
+      return ctx.reply(`🥗 *Meal Logged!*\n\n🍽️ *Food:* ${meal.name}\n🔥 *Calories:* ${meal.calories} kcal\n🥩 *Protein:* ${meal.protein}g | 🍚 *Carbs:* ${meal.carbs}g | 🥑 *Fat:* ${meal.fat}g`, { parse_mode: "Markdown" });
     }
 
-    // 11. MILEAGE
     if (parsed.intent === "MILEAGE") {
       const entry = await logMileage(userId, parsed.data);
-      return ctx.reply(`⛽ *Mileage Logged!*\n\n🚗 *Odometer:* ${entry.odometer} km\n🛢️ *Fuel:* ${entry.liters} L\n💰 *Cost:* ₹${entry.totalCost.toLocaleString("en-IN", { minimumFractionDigits: 2 })}`, { parse_mode: "Markdown", ...postActionChips });
+      return ctx.reply(`⛽ *Mileage Logged!*\n\n🚗 *Odometer:* ${entry.odometer} km\n🛢️ *Fuel:* ${entry.liters} L\n💰 *Cost:* ₹${entry.totalCost.toLocaleString("en-IN", { minimumFractionDigits: 2 })}`, { parse_mode: "Markdown" });
     }
 
-    // 12. QUERY ROUTING
+    // 19. QUERY ROUTING
     if (parsed.intent === "QUERY") {
       const type = parsed.data?.queryType;
       if (type === "balance") return handleBalanceQuery(ctx);
       if (type === "card") return handleCardQuery(ctx);
       if (type === "emis") return handleEmisQuery(ctx);
       if (type === "debts") return handleDebtsQuery(ctx);
-      return handleDailyScorecard(ctx);
+      return handleStatsQuery(ctx);
     }
 
-    return ctx.reply("🤖 I received your message. Tap *🎯 Daily Scorecard* or *🏦 Live Balances* below!", { parse_mode: "Markdown", ...mainMenu });
+    return ctx.reply("🤖 I'm here to help! Ask me anything like _'How much can I spend today?'_, _'Can I afford ₹3,000?'_, or send `/help`.", { parse_mode: "Markdown" });
   } catch (err) {
-    return ctx.reply(`❌ *Error:* ${err.message}`, { parse_mode: "Markdown", ...mainMenu });
+    return ctx.reply(`❌ *Error:* ${err.message}`, { parse_mode: "Markdown" });
   }
-});
+}
 
-// ─── MINI APP WEB DASHBOARD (HTML RESPONSE) ─────────────────────────────────
-const WEB_DASHBOARD_HTML = `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>OrbitLife Live Dashboard</title>
-  <script src="https://telegram.org/js/telegram-web-app.js"></script>
-  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <style>
-    :root {
-      --bg: #0b0f19;
-      --card-bg: rgba(255, 255, 255, 0.04);
-      --card-border: rgba(255, 255, 255, 0.08);
-      --primary: #3b82f6;
-      --accent: #10b981;
-      --warning: #f59e0b;
-      --text: #f8fafc;
-      --text-muted: #94a3b8;
-    }
-    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Outfit', sans-serif; }
-    body { background: var(--bg); color: var(--text); padding: 16px; min-height: 100vh; }
-    .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
-    .logo { font-size: 22px; font-weight: 800; background: linear-gradient(135deg, #60a5fa, #3b82f6); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
-    .badge { background: rgba(16, 185, 129, 0.15); color: #10b981; padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: 600; border: 1px solid rgba(16, 185, 129, 0.3); }
-    .card { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 20px; padding: 18px; margin-bottom: 16px; backdrop-filter: blur(16px); }
-    .title { font-size: 13px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; font-weight: 600; }
-    .amount { font-size: 28px; font-weight: 800; color: #fff; margin-bottom: 12px; }
-    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-    .metric { background: rgba(255, 255, 255, 0.02); padding: 12px; border-radius: 14px; border: 1px solid rgba(255, 255, 255, 0.05); }
-    .metric-val { font-size: 18px; font-weight: 700; color: #fff; margin-top: 4px; }
-    .progress-bg { height: 8px; background: rgba(255, 255, 255, 0.1); border-radius: 10px; overflow: hidden; margin-top: 10px; }
-    .progress-fill { height: 100%; border-radius: 10px; transition: width 0.5s ease; }
-    .btn { display: block; width: 100%; background: linear-gradient(135deg, #2563eb, #1d4ed8); color: #fff; text-align: center; padding: 14px; border-radius: 16px; text-decoration: none; font-weight: 700; border: none; font-size: 15px; cursor: pointer; margin-top: 10px; box-shadow: 0 4px 20px rgba(37, 99, 235, 0.3); }
-  </style>
-</head>
-<body>
-  <div class="header">
-    <div class="logo">⚡ OrbitLife</div>
-    <div class="badge">● LIVE SYNC</div>
-  </div>
-
-  <div class="card" style="background: linear-gradient(135deg, rgba(30, 58, 138, 0.3), rgba(15, 23, 42, 0.6)); border-color: rgba(96, 165, 250, 0.2);">
-    <div class="title">Safe Daily Spending Limit</div>
-    <div class="amount" id="dailyLimit">₹700<span style="font-size: 14px; color: var(--text-muted); font-weight: 500;"> / day</span></div>
-    <div class="progress-bg"><div class="progress-fill" style="width: 15%; background: #10b981;"></div></div>
-    <div style="display: flex; justify-content: space-between; font-size: 12px; color: var(--text-muted); margin-top: 6px;">
-      <span>Spent Today: ₹0</span>
-      <span>Safe Left: ₹700</span>
-    </div>
-  </div>
-
-  <div class="card">
-    <div class="title">💳 Supermoney Secured Credit Card</div>
-    <div class="amount" id="cardAvail">₹16,713.80<span style="font-size: 14px; color: #10b981; font-weight: 600;"> Available</span></div>
-    <div class="grid">
-      <div class="metric">
-        <div class="title">Used Credit</div>
-        <div class="metric-val" style="color: #f59e0b;">₹10,000</div>
-      </div>
-      <div class="metric">
-        <div class="title">Total Limit</div>
-        <div class="metric-val">₹26,713.80</div>
-      </div>
-    </div>
-    <div class="progress-bg"><div class="progress-fill" style="width: 37.4%; background: #f59e0b;"></div></div>
-    <div style="font-size: 12px; color: var(--text-muted); margin-top: 8px; text-align: right;">37.4% Utilization • Statement on 1st</div>
-  </div>
-
-  <div class="card">
-    <div class="title">🏦 Liquid Balances</div>
-    <div class="grid">
-      <div class="metric"><div class="title">HDFC Bank</div><div class="metric-val">₹1,044.69</div></div>
-      <div class="metric"><div class="title">SBI Bank</div><div class="metric-val">₹16.31</div></div>
-    </div>
-  </div>
-
-  <button class="btn" onclick="window.Telegram.WebApp.close()">Done & Return to Chat</button>
-
-  <script>
-    if (window.Telegram && window.Telegram.WebApp) {
-      window.Telegram.WebApp.ready();
-      window.Telegram.WebApp.expand();
-    }
-  </script>
-</body>
-</html>`;
-
-// Vercel Serverless Function Handler
+// ─── VERCEL SERVERLESS HANDLER ──────────────────────────────────────────────
 module.exports = async (req, res) => {
   if (req.method === "POST") {
     try {
-      await bot.handleUpdate(req.body);
-      return res.status(200).send("OK");
+      await bot.handleUpdate(req.body, res);
+      if (!res.headersSent) res.status(200).send("OK");
     } catch (err) {
       console.error("Webhook processing error:", err);
-      return res.status(500).send("Error");
+      if (!res.headersSent) res.status(500).send("Internal Server Error");
     }
+  } else {
+    res.status(200).send("OrbitLife Personal CFO Webhook is Active.");
   }
-  // If user opens the Web App in browser/Telegram Mini App:
-  res.setHeader("Content-Type", "text/html");
-  return res.status(200).send(WEB_DASHBOARD_HTML);
 };
