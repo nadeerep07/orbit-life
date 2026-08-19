@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 import '../../core/utils/app_routes.dart';
 import '../../core/utils/responsive.dart';
 import '../viewmodels/accounts_view_model.dart';
