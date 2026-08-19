@@ -143,7 +143,7 @@ class _Step3CreditCardViewState extends State<Step3CreditCardView> {
               title: const Text('I use an FD-based Secured Credit Card', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.white)),
               subtitle: const Text('Toggle off to skip credit card setup', style: TextStyle(fontSize: 11, color: Colors.white54)),
               value: widget.hasCreditCards,
-              activeColor: const Color(0xFF3B82F6),
+              activeThumbColor: const Color(0xFF3B82F6),
               onChanged: (val) => widget.onToggleHasCreditCards(val),
             ),
           ),
