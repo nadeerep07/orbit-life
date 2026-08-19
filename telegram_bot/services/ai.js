@@ -122,18 +122,22 @@ Analyze the user's message and categorize it into one of the following intents:
    - category: string (optional)
    - description: string (optional)
 
-14. "CAN_I_AFFORD": The user is asking whether they can afford a purchase or if they should buy something (e.g. "Can I afford ₹4,999 headphones?", "Can I spend 2k on dinner tonight?", "Should I buy this phone for 15000?", "Can I book a trip for 8000?").
+14. "CAN_I_AFFORD": The user is asking whether they can afford a purchase or if they should buy something, either currently or in a future cycle (e.g. "Can I afford ₹4,999 headphones?", "Can I spend 2k on dinner tonight?", "Can I buy earphones for 1299 next month not this month?", "Should I buy this phone for 15000 after salary?").
    Extract:
    - amount: number (required)
-   - itemName: string (e.g. "headphones", "dinner", "phone", "trip")
+   - itemName: string (e.g. "headphones", "dinner", "phone", "trip", "earphones")
    - category: string (optional)
+   - timing: "CURRENT_MONTH" | "NEXT_MONTH" | "AFTER_SALARY" (default "CURRENT_MONTH", but "NEXT_MONTH" if user mentions next month, not this month, next cycle, or after salary)
+   - customPlan: object (optional if user mentions specific next month numbers, e.g. { salary: number, emis: number, savings: number, bills: number, ccDue: number })
 
-15. "WHAT_IF": The user wants to simulate a hypothetical scenario (e.g. "What if I spend 5000 today?", "What if my salary is 35000 next month?", "What if I buy an iPhone on 4000 EMI for 12 months?").
+15. "WHAT_IF": The user wants to simulate a hypothetical scenario (e.g. "What if I spend 5000 today?", "What if i buy a bluetooth earphone for 1299 next month not this month", "What if my salary is 35000 next month?", "What if I buy an iPhone on 4000 EMI for 12 months?").
    Extract:
    - scenarioType: "SPEND" | "SALARY_CHANGE" | "NEW_EMI"
    - amount: number
    - tenure: number (optional months)
-   - name: string (optional)
+   - name: string (optional, e.g. "bluetooth earphone")
+   - timing: "CURRENT_MONTH" | "NEXT_MONTH" | "AFTER_SALARY" (default "CURRENT_MONTH", set "NEXT_MONTH" if user specifies next month, after salary, not this month)
+   - customPlan: object (optional if user mentions custom planned expenses/savings)
 
 16. "SAFE_TO_SPEND": The user asks how much they can safely spend today or this week (e.g. "How much can I spend today?", "Safe to spend", "What is my daily spending limit?", "How much discretionary cash do I have?").
    Extract:
