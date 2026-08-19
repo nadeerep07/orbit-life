@@ -97,24 +97,29 @@ class OnboardingRepositoryImpl implements OnboardingRepository {
     double emergencyFundMonths = monthlyExpenses > 0 ? (totalLiquidCash / monthlyExpenses) : 0.0;
 
     int healthScore = 50;
-    if (savingsRate >= 20) healthScore += 15;
-    else if (savingsRate >= 10) healthScore += 8;
+    if (savingsRate >= 20) {
+      healthScore += 15;
+    } else if (savingsRate >= 10) healthScore += 8;
 
-    if (debtToIncome <= 20) healthScore += 15;
-    else if (debtToIncome <= 35) healthScore += 8;
+    if (debtToIncome <= 20) {
+      healthScore += 15;
+    } else if (debtToIncome <= 35) healthScore += 8;
     else healthScore -= 10;
 
-    if (emergencyFundMonths >= 3) healthScore += 15;
-    else if (emergencyFundMonths >= 1) healthScore += 5;
+    if (emergencyFundMonths >= 3) {
+      healthScore += 15;
+    } else if (emergencyFundMonths >= 1) healthScore += 5;
 
-    if (creditUtilization <= 30) healthScore += 10;
-    else if (creditUtilization > 70) healthScore -= 10;
+    if (creditUtilization <= 30) {
+      healthScore += 10;
+    } else if (creditUtilization > 70) healthScore -= 10;
 
     healthScore = max(10, min(99, healthScore));
 
     String riskLevel = 'Low';
-    if (debtToIncome > 40 || emergencyFundMonths < 1) riskLevel = 'High';
-    else if (debtToIncome > 25 || emergencyFundMonths < 3) riskLevel = 'Moderate';
+    if (debtToIncome > 40 || emergencyFundMonths < 1) {
+      riskLevel = 'High';
+    } else if (debtToIncome > 25 || emergencyFundMonths < 3) riskLevel = 'Moderate';
 
     final Map<String, String> explanations = {
       'Health Score': 'Calculated based on your savings rate (${savingsRate.toStringAsFixed(0)}%), debt-to-income (${debtToIncome.toStringAsFixed(0)}%), and liquid emergency runway.',
