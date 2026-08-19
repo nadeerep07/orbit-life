@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 import '../../../../core/utils/currency_formatter.dart';
 import '../../domain/entities/fd_lot_entity.dart';
 
