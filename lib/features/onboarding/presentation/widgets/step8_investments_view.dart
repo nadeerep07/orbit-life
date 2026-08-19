@@ -68,7 +68,7 @@ class _Step8InvestmentsViewState extends State<Step8InvestmentsView> {
                 ),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<String>(
-                  value: type,
+                  initialValue: type,
                   decoration: const InputDecoration(labelText: 'Type', border: OutlineInputBorder()),
                   items: [
                     'Mutual Funds',
