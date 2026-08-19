@@ -745,13 +745,12 @@ async function handleFinancialIntent(ctx, userId, text) {
 
     // 1. CAN I AFFORD THIS?
     if (parsed.intent === "CAN_I_AFFORD") {
-      const { amount, itemName, category } = parsed.data;
-      const res = canIAfford(userData, { amount, itemName, category });
+      const res = canIAfford(userData, parsed.data);
 
       const msg = `${res.verdictEmoji} *${res.verdictTitle}*\n\n` +
         `🛍️ *Purchase:* ${res.itemName || "Item"} (₹${(res.purchaseAmount || 0).toLocaleString("en-IN")})\n` +
         `💰 *Discretionary Surplus:* ₹${(res.discretionaryBalance || 0).toLocaleString("en-IN")}\n` +
-        `📅 *Days Until Salary:* ${res.daysUntilSalary} days\n\n` +
+        `📅 *Cycle / Days:* ${res.timing === "NEXT_MONTH" ? "Next Month (Post-Salary)" : `${res.daysUntilSalary} days to salary`}\n\n` +
         `📊 *CFO Impact:*\n` + (res.impact || []).map((i) => `• ${i}`).join("\n") + "\n\n" +
         `💡 *Recommendation:*\n_${res.recommendation}_`;
 
@@ -761,11 +760,14 @@ async function handleFinancialIntent(ctx, userId, text) {
     // 2. WHAT-IF SCENARIO SIMULATION
     if (parsed.intent === "WHAT_IF") {
       const sim = simulateScenario(userData, parsed.data);
+      const isNextCycle = sim.timing === "NEXT_MONTH" || sim.timing === "AFTER_SALARY";
+
       const msg = `🔮 *OrbitLife Scenario Simulation*\n\n` +
         `📝 *Scenario:* _${sim.summaryText}_\n\n` +
         `📊 *Before vs After Simulation:*\n` +
-        `• Liquid Cash: ₹${sim.current.liquidMoney.toLocaleString("en-IN")} ➔ *₹${sim.simulated.liquidMoney.toLocaleString("en-IN")}*\n` +
-        `• Safe Daily Spend: ₹${sim.current.safeDaily.toLocaleString("en-IN")} ➔ *₹${sim.simulated.safeDaily.toLocaleString("en-IN")}/day*\n` +
+        `• Base Inflow / Liquid: ₹${sim.current.liquidMoney.toLocaleString("en-IN")} ➔ *₹${sim.simulated.liquidMoney.toLocaleString("en-IN")}*\n` +
+        `• Safe Daily Spend: ₹${sim.current.safeDaily.toLocaleString("en-IN")}/day ➔ *₹${sim.simulated.safeDaily.toLocaleString("en-IN")}/day*\n` +
+        `• Discretionary Surplus: ₹${sim.current.discretionary.toLocaleString("en-IN")} ➔ *₹${sim.simulated.discretionary.toLocaleString("en-IN")}*\n` +
         `• Risk Level: ${sim.impact.riskChange}\n\n` +
         `💡 *CFO Verdict:*\n${sim.recommendation}\n\n` +
         `🔒 _Zero-risk simulation. No actual account data was modified._`;
