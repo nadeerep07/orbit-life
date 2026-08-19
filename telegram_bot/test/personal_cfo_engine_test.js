@@ -96,6 +96,15 @@ assert.strictEqual(sim.current.liquidMoney, 17000, "Original data untouched");
 assert.strictEqual(sim.simulated.liquidMoney, 12000, "Simulated liquid should be reduced by 5000");
 console.log(`   ✅ What-If Spend ₹5,000: Diff = ₹${sim.impact.dailyDiff}/day`);
 
+// 3B: Critical Low-Balance Simulation (User's Exact Scenario)
+const lowBalanceUserData = {
+  ...mockUserData,
+  accounts: [{ id: "sbi", name: "SBI Savings", openingBalance: 1663.36 }],
+};
+const simCritical = simulateScenario(lowBalanceUserData, { type: "SPEND", amount: 1299, name: "Earphones" });
+assert.ok(simCritical.recommendation.includes("NOT RECOMMENDED") || simCritical.recommendation.includes("CRITICAL"), "Low balance spend must NOT return safe to proceed!");
+console.log(`   ✅ Critical Low Balance Simulation: ${simCritical.recommendation}`);
+
 // 4. Cash Flow Forecast Tests
 console.log("🔹 4. Testing generate30DayForecast...");
 const forecast = generate30DayForecast(mockUserData, new Date("2026-08-19"));

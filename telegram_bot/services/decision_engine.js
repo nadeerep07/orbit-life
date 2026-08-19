@@ -303,6 +303,36 @@ function simulateScenario(userData, scenario) {
   const dailyDiff = simulatedSafe.safeToSpendToday - currentSafe.safeToSpendToday;
   const discretionaryDiff = simulatedSafe.discretionaryBalance - currentSafe.discretionaryBalance;
 
+  // Intelligent, risk-aware CFO recommendation
+  let recommendation = "";
+  if (type === "SPEND") {
+    if (simulatedSafe.liquidMoney <= 0) {
+      recommendation = `🔴 CRITICAL: This spend completely exhausts your liquid cash (leaves ₹${simulatedSafe.liquidMoney.toLocaleString("en-IN")}). Strictly not recommended.`;
+    } else if (simulatedSafe.financialRiskLevel === "CRITICAL" || simulatedSafe.financialRiskLevel === "TIGHT") {
+      recommendation = `🔴 NOT RECOMMENDED: Your finances are in a ${simulatedSafe.financialRiskLevel} state. Spending ₹${amount.toLocaleString("en-IN")} leaves only ₹${simulatedSafe.liquidMoney.toLocaleString("en-IN")} liquid cash before salary day.`;
+    } else if (simulatedSafe.safeToSpendToday <= 0) {
+      recommendation = `🟠 NOT RECOMMENDED: Exhausts your discretionary budget (safe daily spend drops to ₹0/day). Wait until salary day.`;
+    } else {
+      recommendation = `🟢 Manageable impact: Safe daily allowance adjusts from ₹${currentSafe.safeToSpendToday.toLocaleString("en-IN")} to ₹${simulatedSafe.safeToSpendToday.toLocaleString("en-IN")}/day.`;
+    }
+  } else if (type === "NEW_EMI") {
+    if (simulatedSafe.financialRiskLevel === "CRITICAL" || simulatedSafe.financialRiskLevel === "TIGHT") {
+      recommendation = `🔴 NOT RECOMMENDED: Adding this recurring EMI severely tightens your cash flow into a ${simulatedSafe.financialRiskLevel} state.`;
+    } else {
+      recommendation = `🟡 Manageable EMI: Safe daily allowance adjusts to ₹${simulatedSafe.safeToSpendToday.toLocaleString("en-IN")}/day.`;
+    }
+  } else if (type === "SALARY_CHANGE") {
+    if (dailyDiff > 0) {
+      recommendation = `🟢 Positive financial impact: Increases safe daily allowance by +₹${dailyDiff.toLocaleString("en-IN")}/day.`;
+    } else {
+      recommendation = `🟠 Reduces safe daily allowance by -₹${Math.abs(dailyDiff).toLocaleString("en-IN")}/day.`;
+    }
+  } else {
+    recommendation = simulatedSafe.financialRiskLevel === "CRITICAL" || simulatedSafe.financialRiskLevel === "TIGHT"
+      ? `🔴 NOT RECOMMENDED: Scenario puts finances in a ${simulatedSafe.financialRiskLevel} state.`
+      : `🟢 Safe scenario: Financial risk level remains ${simulatedSafe.financialRiskLevel}.`;
+  }
+
   return {
     isSimulation: true,
     scenarioType: type,
@@ -324,11 +354,7 @@ function simulateScenario(userData, scenario) {
       discretionaryDiff,
       riskChange: `${currentSafe.financialRiskLevel} ➔ ${simulatedSafe.financialRiskLevel}`,
     },
-    recommendation: dailyDiff >= 0
-      ? "🟢 Positive or neutral financial impact. Safe to proceed."
-      : simulatedSafe.financialRiskLevel === "CRITICAL" || simulatedSafe.financialRiskLevel === "TIGHT"
-      ? `🔴 This scenario puts your finances in a ${simulatedSafe.financialRiskLevel} state. Not advised.`
-      : `🟡 Manageable impact, reducing daily allowance by ₹${Math.abs(dailyDiff).toLocaleString("en-IN")}/day.`,
+    recommendation,
   };
 }
 
