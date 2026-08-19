@@ -3,7 +3,6 @@ import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../../core/utils/currency_formatter.dart';
 import '../../core/utils/responsive.dart';
-import '../theme/app_theme.dart';
 import '../viewmodels/expense_view_model.dart';
 import '../viewmodels/budget_view_model.dart';
 import '../viewmodels/month_view_model.dart';
