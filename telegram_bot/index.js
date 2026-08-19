@@ -679,6 +679,42 @@ bot.on(["voice", "audio"], async (ctx) => {
   }
 });
 
+// ─── EDITED MESSAGE HANDLER (Auto-Update on Telegram Edit) ──────────────────
+bot.on("edited_message", async (ctx) => {
+  const chatId = ctx.chat.id;
+  const editedText = ctx.editedMessage?.text?.trim();
+  if (!editedText || editedText.startsWith("/")) return;
+
+  const userId = await getUserIdByChatId(chatId);
+  if (!userId) return;
+
+  try {
+    const parsed = await parseTextMessage(editedText);
+    if (parsed.intent === "EXPENSE" || parsed.intent === "INCOME") {
+      const res = await editLastTransaction(userId, {
+        amount: parsed.data.amount,
+        account: parsed.data.account,
+        category: parsed.data.category,
+        description: parsed.data.description || parsed.data.source,
+      });
+
+      const reply = `✏️ *Transaction Updated via Message Edit!*\n\n` +
+        `📝 *Item:* ${res.description}\n` +
+        `💰 *New Amount:* ₹${res.amount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}\n` +
+        `📁 *Category:* ${res.category}\n` +
+        `💳 *Account:* ${res.account}\n\n` +
+        `_Account balances and stats adjusted automatically!_`;
+
+      return ctx.reply(reply, {
+        parse_mode: "Markdown",
+        ...Markup.inlineKeyboard([[Markup.button.callback("↩️ Undo This", `undo_${res.id}`)]]),
+      });
+    }
+  } catch (err) {
+    console.warn("Error handling edited_message:", err.message);
+  }
+});
+
 // ─── TEXT MESSAGE HANDLER (Natural Language Personal CFO) ───────────────────
 bot.on("text", async (ctx) => {
   const chatId = ctx.chat.id;
@@ -926,6 +962,21 @@ async function handleFinancialIntent(ctx, userId, text) {
         (res.restoredBalance !== null ? `🏦 *${res.restoredAccountName} Restored Balance:* ₹${res.restoredBalance.toLocaleString("en-IN", { minimumFractionDigits: 2 })}\n\n` : "\n") +
         `_Synced across your OrbitLife App in real time!_`;
       return ctx.reply(reply, { parse_mode: "Markdown" });
+    }
+
+    // 18. EDIT LAST TRANSACTION
+    if (parsed.intent === "EDIT_TRANSACTION") {
+      const res = await editLastTransaction(userId, parsed.data);
+      const reply = `✏️ *Transaction Corrected!*\n\n` +
+        `📝 *Item:* ${res.description}\n` +
+        `💰 *Updated Amount:* ₹${res.amount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}\n` +
+        `📁 *Category:* ${res.category}\n` +
+        `💳 *Account:* ${res.account}\n\n` +
+        `_Ledger and bank balances adjusted automatically!_`;
+      return ctx.reply(reply, {
+        parse_mode: "Markdown",
+        ...Markup.inlineKeyboard([[Markup.button.callback("↩️ Undo This", `undo_${res.id}`)]]),
+      });
     }
 
     // 18. MEAL & MILEAGE
