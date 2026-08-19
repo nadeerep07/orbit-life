@@ -245,7 +245,7 @@ class OcrParserService {
         .replaceAll(RegExp(r'[^\w\s\.\-\(\)]'), '')
         .trim();
     if (clean.length > 30) {
-      clean = clean.substring(0, 30).trim() + '...';
+      clean = '${clean.substring(0, 30).trim()}...';
     }
     return clean;
   }
