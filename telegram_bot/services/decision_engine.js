@@ -1,6 +1,7 @@
 /**
  * Financial Decision Engine — OrbitLife Personal CFO
  * Evaluates safe-to-spend, purchase affordability, and what-if financial simulations.
+ * Supports both Current Month and Next Month / Future Cycle forecasting.
  */
 
 /**
@@ -8,9 +9,11 @@
  * 
  * @param {Object} userData Complete user profile from Firestore
  * @param {Date} [currentDate=new Date()]
+ * @param {string} [timing="CURRENT_MONTH"] "CURRENT_MONTH" | "NEXT_MONTH" | "AFTER_SALARY"
+ * @param {Object} [customPlan=null] Optional custom breakdown { salary, emis, savings, bills, ccDue }
  * @returns {Object} Safe-To-Spend metrics and risk assessment
  */
-function calculateSafeToSpend(userData, currentDate = new Date()) {
+function calculateSafeToSpend(userData, currentDate = new Date(), timing = "CURRENT_MONTH", customPlan = null) {
   if (!userData) {
     return {
       liquidMoney: 0,
@@ -22,6 +25,7 @@ function calculateSafeToSpend(userData, currentDate = new Date()) {
       upcomingCommitments: 0,
       protectedBuffer: 0,
       financialRiskLevel: "CRITICAL",
+      isNextMonth: false,
       breakdown: {},
     };
   }
@@ -33,14 +37,20 @@ function calculateSafeToSpend(userData, currentDate = new Date()) {
   const preferences = userData.financialPreferences || {};
   const goals = userData.goals || [];
 
-  // 1. Total Liquid Cash (Excluding credit card liability pseudo-account)
+  // 1. Total Current Liquid Cash (Excluding credit card liability pseudo-account)
   const liquidAccounts = accounts.filter(
     (a) => a.id !== "supermoney" && a.id !== "credit_card" && (a.name || "").toLowerCase() !== "credit card"
   );
-  const liquidMoney = liquidAccounts.reduce((sum, a) => sum + (Number(a.openingBalance) || 0), 0);
+  const currentLiquid = liquidAccounts.reduce((sum, a) => sum + (Number(a.openingBalance) || 0), 0);
 
-  // 2. Days Until Next Salary
+  const isNextCycle = timing === "NEXT_MONTH" || timing === "AFTER_SALARY";
+
+  // 2. Cycle Inflows and Starting Base
   const salaryDay = Number(preferences.salaryDayOfMonth || 1);
+  const expectedSalary = customPlan?.salary !== undefined
+    ? Number(customPlan.salary)
+    : Number(preferences.expectedMonthlySalary || 29600);
+
   const now = new Date(currentDate);
   const currentDay = now.getDate();
   const currentMonth = now.getMonth();
@@ -53,9 +63,14 @@ function calculateSafeToSpend(userData, currentDate = new Date()) {
     nextSalaryDate = new Date(currentYear, currentMonth + 1, salaryDay);
   }
   const msPerDay = 1000 * 60 * 60 * 24;
-  const daysUntilSalary = Math.max(1, Math.ceil((nextSalaryDate - now) / msPerDay));
+  const currentDaysUntilSalary = Math.max(1, Math.ceil((nextSalaryDate - now) / msPerDay));
 
-  // 3. Upcoming Mandatory Commitments before next salary
+  const daysUntilSalary = isNextCycle ? 30 : currentDaysUntilSalary;
+  const liquidMoney = isNextCycle
+    ? (Math.max(0, currentLiquid) + expectedSalary)
+    : currentLiquid;
+
+  // 3. Upcoming Mandatory Commitments
   let upcomingEmis = 0;
   emis.forEach((e) => {
     if (!e.isPaid && (e.remainingMonths === undefined || Number(e.remainingMonths) > 0)) {
@@ -76,13 +91,22 @@ function calculateSafeToSpend(userData, currentDate = new Date()) {
     }
   });
 
-  const upcomingCommitments = upcomingEmis + creditCardDue + upcomingDebtsPayable;
+  let totalMandatory = 0;
+  if (isNextCycle) {
+    const plannedEmis = customPlan?.emis !== undefined ? Number(customPlan.emis) : upcomingEmis;
+    const plannedBills = customPlan?.bills !== undefined ? Number(customPlan.bills) : 0;
+    const plannedCc = customPlan?.ccDue !== undefined ? Number(customPlan.ccDue) : 0;
+    totalMandatory = plannedEmis + plannedBills + plannedCc;
+  } else {
+    totalMandatory = upcomingEmis + creditCardDue + upcomingDebtsPayable;
+  }
 
   // 4. Protected Buffer (Emergency Reserve + Minimum Savings + Goal Allocations)
   const emergencyBuffer = Number(preferences.emergencyBufferTarget || 1500);
-  const minimumSavings = Number(preferences.minimumMonthlySavings || (userData.savingsTarget?.targetAmount) || 2000);
-  
-  // Monthly goal contributions
+  const minimumSavings = customPlan?.savings !== undefined
+    ? Number(customPlan.savings)
+    : Number(preferences.minimumMonthlySavings || (userData.savingsTarget?.targetAmount) || 3000);
+
   let goalContributions = 0;
   goals.forEach((g) => {
     if (!g.isCompleted && g.targetAmount && g.targetAmount > (g.currentAmount || 0)) {
@@ -94,7 +118,7 @@ function calculateSafeToSpend(userData, currentDate = new Date()) {
   const protectedBuffer = emergencyBuffer + minimumSavings + goalContributions;
 
   // 5. Discretionary Safe Balance
-  const rawDiscretionary = liquidMoney - upcomingCommitments - protectedBuffer;
+  const rawDiscretionary = liquidMoney - totalMandatory - protectedBuffer;
   const discretionaryBalance = Math.max(0, rawDiscretionary);
 
   // 6. Safe Daily and Weekly Allocations
@@ -104,7 +128,7 @@ function calculateSafeToSpend(userData, currentDate = new Date()) {
 
   // 7. Risk Level Assessment
   let financialRiskLevel = "SAFE";
-  if (liquidMoney <= (upcomingCommitments + emergencyBuffer * 0.5)) {
+  if (liquidMoney <= (totalMandatory + emergencyBuffer * 0.5)) {
     financialRiskLevel = "CRITICAL";
   } else if (rawDiscretionary < 0) {
     financialRiskLevel = "TIGHT";
@@ -121,11 +145,13 @@ function calculateSafeToSpend(userData, currentDate = new Date()) {
     safeToSpendUntilSalary,
     discretionaryBalance,
     daysUntilSalary,
-    upcomingCommitments,
+    upcomingCommitments: totalMandatory,
     protectedBuffer,
     financialRiskLevel,
+    isNextMonth: isNextCycle,
     breakdown: {
       liquidMoney,
+      expectedSalary: isNextCycle ? expectedSalary : 0,
       upcomingEmis,
       creditCardDue,
       upcomingDebtsPayable,
@@ -142,13 +168,16 @@ function calculateSafeToSpend(userData, currentDate = new Date()) {
  * 'Can I Afford This?' — Multi-Factor Financial Purchase Analysis
  * 
  * @param {Object} userData Complete user profile from Firestore
- * @param {Object} purchase { amount, itemName, category, paymentMethod }
+ * @param {Object} purchase { amount, itemName, category, paymentMethod, timing, customPlan }
  * @returns {Object} Verdict, score, impact analysis, and actionable advice
  */
 function canIAfford(userData, purchase) {
   const amount = Number(purchase.amount || 0);
   const itemName = purchase.itemName || "this item";
-  const safeMetrics = calculateSafeToSpend(userData);
+  const timing = purchase.timing || "CURRENT_MONTH";
+  const customPlan = purchase.customPlan || null;
+
+  const safeMetrics = calculateSafeToSpend(userData, new Date(), timing, customPlan);
 
   if (amount <= 0) {
     return {
@@ -160,48 +189,56 @@ function canIAfford(userData, purchase) {
     };
   }
 
-  const { liquidMoney, safeToSpendToday, safeToSpendThisWeek, discretionaryBalance, daysUntilSalary, breakdown } = safeMetrics;
+  const { liquidMoney, safeToSpendToday, safeToSpendThisWeek, discretionaryBalance, daysUntilSalary, breakdown, isNextMonth } = safeMetrics;
+  const cycleName = isNextMonth ? "Next Month (Post-Salary)" : "Current Month";
 
-  // Case 1: Insufficient Total Liquid Cash
+  // Case 1: Insufficient Total Liquid Cash in Target Cycle
   if (amount > liquidMoney) {
     return {
       verdict: "NOT_RECOMMENDED",
       verdictEmoji: "🔴",
-      verdictTitle: "NOT RECOMMENDED (Insufficient Funds)",
+      verdictTitle: `NOT RECOMMENDED (${cycleName})`,
       purchaseAmount: amount,
       itemName,
+      timing,
       isAffordable: false,
       discretionaryBalance,
       liquidMoney,
       daysUntilSalary,
       shortfall: amount - liquidMoney,
       impact: [
-        `Exceeds your total liquid balance of ₹${liquidMoney.toLocaleString("en-IN")}.`,
+        `Exceeds your ${isNextMonth ? "projected" : "current"} liquid balance of ₹${liquidMoney.toLocaleString("en-IN")}.`,
         `Would require borrowing or increasing credit card debt by ₹${(amount - liquidMoney).toLocaleString("en-IN")}.`,
       ],
-      recommendation: `Wait until your next salary in ${daysUntilSalary} days before considering this purchase.`,
+      recommendation: `This purchase exceeds your total funds for ${cycleName}. Consider a lower-cost option or saving over multiple months.`,
     };
   }
 
-  // Case 2: Easily Affordable (Within Daily or 3-Day Safe Spend)
-  if (amount <= safeToSpendToday) {
-    const newDaily = Math.max(0, Math.floor((discretionaryBalance - amount) / daysUntilSalary));
+  // Case 2: Easily Affordable (Within Safe Daily Spend or Healthy Discretionary)
+  if (amount <= safeToSpendToday || (isNextMonth && amount <= discretionaryBalance * 0.5)) {
+    const newDiscretionary = discretionaryBalance - amount;
+    const newDaily = Math.max(0, Math.floor(newDiscretionary / daysUntilSalary));
     return {
       verdict: "RECOMMENDED",
       verdictEmoji: "🟢",
-      verdictTitle: "RECOMMENDED (Safely Affordable)",
+      verdictTitle: `RECOMMENDED (${cycleName})`,
       purchaseAmount: amount,
       itemName,
+      timing,
       isAffordable: true,
       discretionaryBalance,
       safeToSpendToday,
       daysUntilSalary,
       impact: [
-        `Fits comfortably within today's safe allowance (₹${safeToSpendToday.toLocaleString("en-IN")}).`,
-        `Your protected savings (₹${breakdown.minimumSavings.toLocaleString("en-IN")}) and emergency buffer remain untouched.`,
-        `New safe daily allowance will be ₹${newDaily.toLocaleString("en-IN")}.`,
+        isNextMonth
+          ? `Your next month's salary (₹${breakdown.expectedSalary.toLocaleString("en-IN")}) covers this spend easily.`
+          : `Fits comfortably within today's safe allowance (₹${safeToSpendToday.toLocaleString("en-IN")}).`,
+        `Your protected savings (₹${breakdown.minimumSavings.toLocaleString("en-IN")}) and emergency buffer (₹${breakdown.emergencyBuffer.toLocaleString("en-IN")}) remain 100% intact.`,
+        `Remaining discretionary budget: ₹${newDiscretionary.toLocaleString("en-IN")} (safe daily spend: ₹${newDaily.toLocaleString("en-IN")}/day).`,
       ],
-      recommendation: `You can proceed with this purchase without compromising upcoming obligations.`,
+      recommendation: isNextMonth
+        ? `Buying ${itemName} in next month's budget is 100% safe and recommended!`
+        : `You can proceed with this purchase without compromising upcoming obligations.`,
     };
   }
 
@@ -214,9 +251,10 @@ function canIAfford(userData, purchase) {
     return {
       verdict: "PROCEED_WITH_CAUTION",
       verdictEmoji: "🟡",
-      verdictTitle: "PROCEED WITH CAUTION",
+      verdictTitle: `PROCEED WITH CAUTION (${cycleName})`,
       purchaseAmount: amount,
       itemName,
+      timing,
       isAffordable: true,
       discretionaryBalance,
       daysUntilSalary,
@@ -231,24 +269,27 @@ function canIAfford(userData, purchase) {
     };
   }
 
-  // Case 4: Breaches Protected Buffer / Upcoming Commitments
+  // Case 4: Breaches Protected Buffer / Commitments
   const deficit = amount - discretionaryBalance;
   return {
     verdict: "WAIT_FOR_SALARY",
     verdictEmoji: "🟠",
-    verdictTitle: "NOT RECOMMENDED (Breaches Protected Savings)",
+    verdictTitle: `NOT RECOMMENDED (${cycleName})`,
     purchaseAmount: amount,
     itemName,
+    timing,
     isAffordable: false,
     discretionaryBalance,
     deficit,
     daysUntilSalary,
     impact: [
       `Exceeds discretionary buffer by ₹${deficit.toLocaleString("en-IN")}.`,
-      `Would cut directly into your emergency reserve (₹${breakdown.emergencyBuffer.toLocaleString("en-IN")}) or upcoming EMI commitments (₹${breakdown.upcomingEmis.toLocaleString("en-IN")}).`,
+      `Would cut directly into your emergency reserve (₹${breakdown.emergencyBuffer.toLocaleString("en-IN")}) or upcoming commitments (₹${breakdown.upcomingEmis.toLocaleString("en-IN")}).`,
       `Safe-to-spend for the next ${daysUntilSalary} days would drop to ₹0.`,
     ],
-    recommendation: `Hold off on purchasing ${itemName}. Wait ${daysUntilSalary} days until your salary arrives on ${breakdown.nextSalaryDate}.`,
+    recommendation: isNextMonth
+      ? `Even with next month's salary, this purchase cuts into your ₹${breakdown.minimumSavings.toLocaleString("en-IN")} savings target.`
+      : `Hold off on purchasing ${itemName}. Wait ${daysUntilSalary} days until your salary arrives on ${breakdown.nextSalaryDate}.`,
   };
 }
 
@@ -257,11 +298,15 @@ function canIAfford(userData, purchase) {
  * Does NOT mutate Firestore or any real account records.
  * 
  * @param {Object} userData 
- * @param {Object} scenario { type: 'SPEND' | 'SALARY_CHANGE' | 'NEW_EMI' | 'SAVE_GOAL', amount, tenure, name }
+ * @param {Object} scenario { type: 'SPEND' | 'SALARY_CHANGE' | 'NEW_EMI' | 'SAVE_GOAL', amount, tenure, name, timing, customPlan }
  * @returns {Object} Simulation analysis and comparison
  */
 function simulateScenario(userData, scenario) {
-  const currentSafe = calculateSafeToSpend(userData);
+  const timing = scenario.timing || "CURRENT_MONTH";
+  const customPlan = scenario.customPlan || null;
+  const isNextCycle = timing === "NEXT_MONTH" || timing === "AFTER_SALARY";
+
+  const currentSafe = calculateSafeToSpend(userData, new Date(), timing, customPlan);
   const type = (scenario.type || "SPEND").toUpperCase();
   const amount = Number(scenario.amount || 0);
 
@@ -269,18 +314,28 @@ function simulateScenario(userData, scenario) {
   let summaryText = "";
 
   if (type === "SPEND") {
-    // Clone and deduct amount from first available liquid account
     const clonedUser = JSON.parse(JSON.stringify(userData));
-    if (clonedUser.accounts && clonedUser.accounts.length > 0) {
-      clonedUser.accounts[0].openingBalance = (Number(clonedUser.accounts[0].openingBalance) || 0) - amount;
+    if (isNextCycle) {
+      // In next cycle, salary is credited and planned commitments are deducted
+      simulatedSafe = calculateSafeToSpend(clonedUser, new Date(), "NEXT_MONTH", customPlan);
+      // Reduce the discretionary surplus by the simulated spend amount
+      const newDiscretionary = Math.max(0, simulatedSafe.discretionaryBalance - amount);
+      simulatedSafe.discretionaryBalance = newDiscretionary;
+      simulatedSafe.safeToSpendToday = Math.floor(newDiscretionary / 30);
+      simulatedSafe.liquidMoney = Math.max(0, simulatedSafe.liquidMoney - amount);
+      summaryText = `Simulating a spend of ₹${amount.toLocaleString("en-IN")} in Next Month's budget (post-salary)`;
+    } else {
+      if (clonedUser.accounts && clonedUser.accounts.length > 0) {
+        clonedUser.accounts[0].openingBalance = (Number(clonedUser.accounts[0].openingBalance) || 0) - amount;
+      }
+      simulatedSafe = calculateSafeToSpend(clonedUser, new Date(), "CURRENT_MONTH");
+      summaryText = `Simulating a one-time spend of ₹${amount.toLocaleString("en-IN")} in Current Month`;
     }
-    simulatedSafe = calculateSafeToSpend(clonedUser);
-    summaryText = `Simulating a one-time spend of ₹${amount.toLocaleString("en-IN")}`;
   } else if (type === "SALARY_CHANGE") {
     const clonedUser = JSON.parse(JSON.stringify(userData));
     if (!clonedUser.financialPreferences) clonedUser.financialPreferences = {};
     clonedUser.financialPreferences.expectedMonthlySalary = amount;
-    simulatedSafe = calculateSafeToSpend(clonedUser);
+    simulatedSafe = calculateSafeToSpend(clonedUser, new Date(), timing);
     summaryText = `Simulating monthly salary changing to ₹${amount.toLocaleString("en-IN")}`;
   } else if (type === "NEW_EMI") {
     const clonedUser = JSON.parse(JSON.stringify(userData));
@@ -293,7 +348,7 @@ function simulateScenario(userData, scenario) {
       totalAmount: amount,
       isPaid: false,
     });
-    simulatedSafe = calculateSafeToSpend(clonedUser);
+    simulatedSafe = calculateSafeToSpend(clonedUser, new Date(), timing);
     summaryText = `Simulating a new EMI of ₹${monthlyEmi.toLocaleString("en-IN")}/mo for ${scenario.tenure || 12} months`;
   } else {
     simulatedSafe = currentSafe;
@@ -306,14 +361,24 @@ function simulateScenario(userData, scenario) {
   // Intelligent, risk-aware CFO recommendation
   let recommendation = "";
   if (type === "SPEND") {
-    if (simulatedSafe.liquidMoney <= 0) {
-      recommendation = `🔴 CRITICAL: This spend completely exhausts your liquid cash (leaves ₹${simulatedSafe.liquidMoney.toLocaleString("en-IN")}). Strictly not recommended.`;
-    } else if (simulatedSafe.financialRiskLevel === "CRITICAL" || simulatedSafe.financialRiskLevel === "TIGHT") {
-      recommendation = `🔴 NOT RECOMMENDED: Your finances are in a ${simulatedSafe.financialRiskLevel} state. Spending ₹${amount.toLocaleString("en-IN")} leaves only ₹${simulatedSafe.liquidMoney.toLocaleString("en-IN")} liquid cash before salary day.`;
-    } else if (simulatedSafe.safeToSpendToday <= 0) {
-      recommendation = `🟠 NOT RECOMMENDED: Exhausts your discretionary budget (safe daily spend drops to ₹0/day). Wait until salary day.`;
+    if (isNextCycle) {
+      if (simulatedSafe.discretionaryBalance > 3000) {
+        recommendation = `🟢 100% RECOMMENDED FOR NEXT MONTH: Your next month's salary (₹${currentSafe.breakdown.expectedSalary.toLocaleString("en-IN")}) easily covers your ₹${currentSafe.breakdown.minimumSavings.toLocaleString("en-IN")} savings target and commitments, leaving ₹${simulatedSafe.discretionaryBalance.toLocaleString("en-IN")} free discretionary cash. Buying ${scenario.name || "this"} for ₹${amount.toLocaleString("en-IN")} is completely safe!`;
+      } else if (simulatedSafe.discretionaryBalance > 0) {
+        recommendation = `🟡 PROCEED WITH CAUTION: In next month's budget, this leaves ₹${simulatedSafe.discretionaryBalance.toLocaleString("en-IN")} free discretionary cash (~₹${simulatedSafe.safeToSpendToday.toLocaleString("en-IN")}/day).`;
+      } else {
+        recommendation = `🔴 NOT RECOMMENDED: Even with next month's salary, this spend exceeds your planned commitments and ₹${currentSafe.breakdown.minimumSavings.toLocaleString("en-IN")} savings goal.`;
+      }
     } else {
-      recommendation = `🟢 Manageable impact: Safe daily allowance adjusts from ₹${currentSafe.safeToSpendToday.toLocaleString("en-IN")} to ₹${simulatedSafe.safeToSpendToday.toLocaleString("en-IN")}/day.`;
+      if (simulatedSafe.liquidMoney <= 0) {
+        recommendation = `🔴 CRITICAL: This spend completely exhausts your current liquid cash (leaves ₹${simulatedSafe.liquidMoney.toLocaleString("en-IN")}). Strictly not recommended for this month.`;
+      } else if (simulatedSafe.financialRiskLevel === "CRITICAL" || simulatedSafe.financialRiskLevel === "TIGHT") {
+        recommendation = `🔴 NOT RECOMMENDED FOR THIS MONTH: Your current finances are in a ${simulatedSafe.financialRiskLevel} state. Spending ₹${amount.toLocaleString("en-IN")} leaves only ₹${simulatedSafe.liquidMoney.toLocaleString("en-IN")} liquid cash before salary day. Wait for next month's salary.`;
+      } else if (simulatedSafe.safeToSpendToday <= 0) {
+        recommendation = `🟠 NOT RECOMMENDED: Exhausts your current discretionary budget (safe daily spend drops to ₹0/day). Wait until next month's salary.`;
+      } else {
+        recommendation = `🟢 Manageable impact: Safe daily allowance adjusts from ₹${currentSafe.safeToSpendToday.toLocaleString("en-IN")} to ₹${simulatedSafe.safeToSpendToday.toLocaleString("en-IN")}/day.`;
+      }
     }
   } else if (type === "NEW_EMI") {
     if (simulatedSafe.financialRiskLevel === "CRITICAL" || simulatedSafe.financialRiskLevel === "TIGHT") {
@@ -336,6 +401,7 @@ function simulateScenario(userData, scenario) {
   return {
     isSimulation: true,
     scenarioType: type,
+    timing,
     summaryText,
     current: {
       liquidMoney: currentSafe.liquidMoney,
