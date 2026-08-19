@@ -102,7 +102,7 @@ class _FdCreditCardDashboardScreenState extends State<FdCreditCardDashboardScree
 
                   // Destination dropdown
                   DropdownButtonFormField<String>(
-                    value: selectedDest,
+                    initialValue: selectedDest,
                     decoration: InputDecoration(
                       labelText: 'Credit Destination Account',
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
@@ -110,7 +110,7 @@ class _FdCreditCardDashboardScreenState extends State<FdCreditCardDashboardScree
                     items: [
                       ...accountsVM.accounts
                           .where((a) => a.id != 'supermoney')
-                          .map((a) => DropdownMenuItem(value: a.id, child: Text('${a.name} (${currencySymbol}${a.openingBalance.toStringAsFixed(0)})'))),
+                          .map((a) => DropdownMenuItem(value: a.id, child: Text('${a.name} ($currencySymbol${a.openingBalance.toStringAsFixed(0)})'))),
                       const DropdownMenuItem(value: 'credit_payment', child: Text('Credit Card Bill Settlement')),
                       const DropdownMenuItem(value: 'fd', child: Text('Reinvest in New FD')),
                     ],
