@@ -388,7 +388,7 @@ class _Step9GoalsViewState extends State<Step9GoalsView> {
               title: const Text('I have financial targets & goals', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.white)),
               subtitle: const Text('Toggle off to skip goal milestones', style: TextStyle(fontSize: 11, color: Colors.white54)),
               value: widget.hasGoals,
-              activeColor: const Color(0xFF3B82F6),
+              activeThumbColor: const Color(0xFF3B82F6),
               onChanged: (val) => widget.onToggleHasGoals(val),
             ),
           ),
