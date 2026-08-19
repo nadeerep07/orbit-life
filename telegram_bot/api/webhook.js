@@ -37,6 +37,12 @@ const { getPreferences, updatePreferences, setCategoryBudget, setGoal } = requir
 const { evaluateAlerts } = require("../services/alerts");
 const { transcribeAudio } = require("../services/voice");
 const { acquireIdempotencyLock } = require("../services/idempotency");
+const { getMorningDigest, getEveningWrapUp, getUpcomingBillReminders } = require("../services/scheduler");
+const { parseBankSms } = require("../services/sms_parser");
+const { detectMoneyLeaks } = require("../services/leak_detector");
+const { calculateWealthTrajectory } = require("../services/wealth_engine");
+const { recommendPaymentMethod } = require("../services/payment_advisor");
+const { generateMonthlyStatement } = require("../services/export_engine");
 
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 initializeFirebase();
@@ -49,7 +55,8 @@ const commandCenterMenu = Markup.keyboard([
   ["💳 Supermoney Card", "🎯 Goals & Budgets"],
   ["📊 Daily Briefing", "📈 Weekly Review"],
   ["🧠 Financial Health", "🔮 What If? Simulator"],
-  ["📸 Scan Receipt", "❓ Help & Commands"],
+  ["🌟 Wealth Milestones", "🔍 Money Leaks"],
+  ["📄 Export Statement", "❓ Help & Commands"],
 ]).resize();
 
 // ─── COMMAND: /start ────────────────────────────────────────────────────────
@@ -58,18 +65,19 @@ bot.start(async (ctx) => {
   const userId = await getUserIdByChatId(chatId);
 
   let msg = `👋 *Welcome to OrbitLife — Your 24/7 AI Personal CFO!*\n\n` +
-    `OrbitLife is your intelligent financial command center. You can talk naturally, send voice notes, scan receipts, or ask for financial advice:\n\n`;
+    `OrbitLife is your intelligent financial command center. You can talk naturally, send voice notes, forward bank SMS, scan receipts, or ask for financial advice:\n\n`;
 
   if (userId) {
     msg += `✅ *Linked Account:* \`${userId.substring(0, 8)}...\`\n\n` +
       `⚡ *Try asking Orbit right now:*\n` +
       `• _"How much can I safely spend today?"_\n` +
       `• _"Can I afford ₹4,999 headphones?"_\n` +
-      `• _"What if I spend ₹5,000 this weekend?"_\n` +
-      `• _"Give me my morning briefing"_\n` +
-      `• _"Check my financial health score"_\n` +
-      `• _"Spent ₹350 on lunch with UPI"_\n` +
-      `• _"Shamveel paid remaining ₹2,500 to SBI"_`;
+      `• _"What if I buy earphones for 1299 next month?"_\n` +
+      `• _"When will I reach ₹1 Lakh net worth?"_\n` +
+      `• _"Where is my money leaking this week?"_\n` +
+      `• _"Should I pay ₹3,500 using UPI or Supermoney Card?"_\n` +
+      `• _"Send my monthly statement"_\n` +
+      `• 📲 *Forward any Bank SMS* to log transactions instantly!`;
   } else {
     msg += `⚠️ *Account Not Linked Yet*\n` +
       `Use \`/link YOUR_FIREBASE_USER_ID\` from your OrbitLife App settings to connect in seconds.`;
@@ -142,26 +150,29 @@ async function handleBriefingQuery(ctx) {
   if (!userId) return ctx.reply("⚠️ Link account first.");
 
   try {
-    const userData = await getUserData(userId);
-    const brief = generateDailyBriefing(userData);
-
-    const msg = `🌅 *Orbit Daily Morning Briefing*\n\n` +
-      `💰 *Liquid Cash:* ₹${brief.liquidMoney.toLocaleString("en-IN")}\n` +
-      `💸 *Safe to Spend Today:* *₹${brief.safeToSpendToday.toLocaleString("en-IN")}*\n` +
-      `📅 *Salary In:* ${brief.daysUntilSalary} days\n` +
-      `📌 *Next Bill:* ${brief.nextBill}\n\n` +
-      `💳 *Credit Card:* ₹${brief.creditCard.used.toLocaleString("en-IN")} / ₹${brief.creditCard.limit.toLocaleString("en-IN")} (${brief.creditCard.utilPercent}% Util)\n` +
-      `🎯 *Top Goal:* ${brief.goalProgress}\n` +
-      `💸 *Spent Today:* ₹${brief.todaySpent.toLocaleString("en-IN")}\n\n` +
-      `🧠 *Orbit's CFO Advice:*\n_${brief.cfoTip}_`;
-
-    await ctx.reply(msg, { parse_mode: "Markdown" });
+    const digest = await getMorningDigest(userId);
+    await ctx.reply(digest, { parse_mode: "Markdown" });
   } catch (err) {
     await ctx.reply(`❌ *Error:* ${err.message}`);
   }
 }
 bot.command("briefing", handleBriefingQuery);
 bot.hears("📊 Daily Briefing", handleBriefingQuery);
+
+// ─── ACTION: 🌙 EVENING WRAP-UP ─────────────────────────────────────────────
+async function handleEveningQuery(ctx) {
+  const chatId = ctx.chat.id;
+  const userId = await getUserIdByChatId(chatId);
+  if (!userId) return ctx.reply("⚠️ Link account first.");
+
+  try {
+    const wrap = await getEveningWrapUp(userId);
+    await ctx.reply(wrap, { parse_mode: "Markdown" });
+  } catch (err) {
+    await ctx.reply(`❌ *Error:* ${err.message}`);
+  }
+}
+bot.command("evening", handleEveningQuery);
 
 // ─── ACTION: 📈 WEEKLY REVIEW ───────────────────────────────────────────────
 async function handleWeeklyReviewQuery(ctx) {
@@ -227,6 +238,127 @@ async function handleHealthScoreQuery(ctx) {
 bot.command("health", handleHealthScoreQuery);
 bot.hears("🧠 Financial Health", handleHealthScoreQuery);
 
+// ─── ACTION: 🔍 MONEY LEAKS DETECTOR ────────────────────────────────────────
+async function handleLeaksQuery(ctx) {
+  const chatId = ctx.chat.id;
+  const userId = await getUserIdByChatId(chatId);
+  if (!userId) return ctx.reply("⚠️ Link account first.");
+
+  try {
+    const userData = await getUserData(userId);
+    const report = detectMoneyLeaks(userData);
+
+    if (report.leakCount === 0) {
+      return ctx.reply("🟢 *No money leaks detected!* Your spending discipline this week has been exceptional.", { parse_mode: "Markdown" });
+    }
+
+    let msg = `🔍 *OrbitLife Money Leak & Impulse Spending Analysis*\n\n`;
+    report.leaks.forEach((l) => {
+      msg += `• *${l.title}* [${l.severity}]\n  ${l.detail}\n  💡 _${l.actionPrompt}_\n\n`;
+    });
+
+    if (report.recommendations.length > 0) {
+      msg += `🎯 *Action Steps:*\n` + report.recommendations.map((r) => `• ${r}`).join("\n");
+    }
+
+    await ctx.reply(msg, { parse_mode: "Markdown" });
+  } catch (err) {
+    await ctx.reply(`❌ *Leak Detector Error:* ${err.message}`);
+  }
+}
+bot.command("leaks", handleLeaksQuery);
+bot.hears("🔍 Money Leaks", handleLeaksQuery);
+
+// ─── ACTION: 🌟 WEALTH TRAJECTORY & MILESTONES ──────────────────────────────
+async function handleWealthQuery(ctx) {
+  const chatId = ctx.chat.id;
+  const userId = await getUserIdByChatId(chatId);
+  if (!userId) return ctx.reply("⚠️ Link account first.");
+
+  try {
+    const userData = await getUserData(userId);
+    const traj = calculateWealthTrajectory(userData);
+
+    let msg = `🌟 *Net Worth Trajectory & Milestone Timeline*\n\n` +
+      `💰 *Current Net Worth:* *₹${traj.currentNetWorth.toLocaleString("en-IN")}*\n` +
+      `🔒 *Fixed Deposits (FDs):* ₹${traj.totalFdPrincipal.toLocaleString("en-IN")} (8.25% p.a. Compounding)\n` +
+      `📈 *Monthly Savings Rate:* ₹${traj.monthlySavings.toLocaleString("en-IN")}/mo\n\n` +
+      `🚀 *Projected Wealth Growth:*\n` +
+      `• In 6 Months: *₹${traj.projections.in6Months.toLocaleString("en-IN")}*\n` +
+      `• In 1 Year: *₹${traj.projections.in1Year.toLocaleString("en-IN")}*\n` +
+      `• In 3 Years: *₹${traj.projections.in3Years.toLocaleString("en-IN")}*\n` +
+      `• In 5 Years: *₹${traj.projections.in5Years.toLocaleString("en-IN")}*\n\n` +
+      `🎯 *Milestone Target Forecasts:*\n`;
+
+    traj.milestones.forEach((m) => {
+      const icon = m.status === "ACHIEVED_🎉" ? "🎉" : "⏳";
+      msg += `• ${m.title}: *${m.estimatedDate}* ${icon} ${m.monthsRemaining > 0 ? `(~${m.monthsRemaining} mos)` : ""}\n`;
+    });
+
+    await ctx.reply(msg, { parse_mode: "Markdown" });
+  } catch (err) {
+    await ctx.reply(`❌ *Wealth Engine Error:* ${err.message}`);
+  }
+}
+bot.command("wealth", handleWealthQuery);
+bot.command("milestones", handleWealthQuery);
+bot.hears("🌟 Wealth Milestones", handleWealthQuery);
+
+// ─── ACTION: 📄 MONTHLY STATEMENT EXPORT ────────────────────────────────────
+async function handleStatementQuery(ctx, monthStr = null) {
+  const chatId = ctx.chat.id;
+  const userId = await getUserIdByChatId(chatId);
+  if (!userId) return ctx.reply("⚠️ Link account first.");
+
+  try {
+    const userData = await getUserData(userId);
+    const stmt = generateMonthlyStatement(userData, monthStr);
+
+    let summaryMsg = `📄 *OrbitLife Financial Statement (${stmt.period})*\n\n` +
+      `📈 *Total Income:* ₹${stmt.totalEarned.toLocaleString("en-IN")}\n` +
+      `📉 *Total Outflows:* ₹${stmt.totalSpent.toLocaleString("en-IN")}\n` +
+      `💼 *Net Surplus:* ₹${stmt.netSurplus.toLocaleString("en-IN")}\n` +
+      `🎯 *Savings Rate:* *${stmt.savingsRate}%*\n\n` +
+      `_Detailed statement below:_`;
+
+    await ctx.reply(summaryMsg, { parse_mode: "Markdown" });
+    await ctx.reply(`\`\`\`\n${stmt.reportText}\n\`\`\``, { parse_mode: "Markdown" });
+  } catch (err) {
+    await ctx.reply(`❌ *Export Error:* ${err.message}`);
+  }
+}
+bot.command("statement", (ctx) => handleStatementQuery(ctx));
+bot.command("export", (ctx) => handleStatementQuery(ctx));
+bot.hears("📄 Export Statement", (ctx) => handleStatementQuery(ctx));
+
+// ─── ACTION: 💳 SMART PAYMENT METHOD ADVISOR ────────────────────────────────
+async function handlePaymentAdvice(ctx, amount, merchant = "") {
+  const chatId = ctx.chat.id;
+  const userId = await getUserIdByChatId(chatId);
+  if (!userId) return ctx.reply("⚠️ Link account first.");
+
+  try {
+    const userData = await getUserData(userId);
+    const advice = recommendPaymentMethod(userData, amount, merchant);
+
+    const msg = `💳 *Orbit Payment Method Recommendation*\n\n` +
+      `🛍️ *Purchase Amount:* ₹${Number(amount || 0).toLocaleString("en-IN")}\n` +
+      `✅ *Best Payment Channel:* *${advice.recommendedMode}*\n\n` +
+      `🧠 *Rationale:*\n${advice.reason}\n\n` +
+      `📊 *Credit Score Impact:*\n${advice.utilizationImpact}` +
+      (advice.tip ? `\n\n💡 _${advice.tip}_` : "");
+
+    await ctx.reply(msg, { parse_mode: "Markdown" });
+  } catch (err) {
+    await ctx.reply(`❌ *Payment Advisor Error:* ${err.message}`);
+  }
+}
+bot.command("howtopay", (ctx) => {
+  const parts = ctx.message.text.split(/\s+/);
+  const amt = Number(parts[1] || 1000);
+  handlePaymentAdvice(ctx, amt, "");
+});
+
 // ─── ACTION: 🔮 WHAT-IF SIMULATOR ───────────────────────────────────────────
 async function handleWhatIfSimulation(ctx, text) {
   const chatId = ctx.chat.id;
@@ -243,11 +375,12 @@ async function handleWhatIfSimulation(ctx, text) {
     const msg = `🔮 *OrbitLife Scenario Simulation*\n\n` +
       `📝 *Scenario:* _${sim.summaryText}_\n\n` +
       `📊 *Before vs After Simulation:*\n` +
-      `• Liquid Cash: ₹${sim.current.liquidMoney.toLocaleString("en-IN")} ➔ *₹${sim.simulated.liquidMoney.toLocaleString("en-IN")}*\n` +
-      `• Safe Daily Spend: ₹${sim.current.safeDaily.toLocaleString("en-IN")} ➔ *₹${sim.simulated.safeDaily.toLocaleString("en-IN")}/day*\n` +
+      `• Base Inflow / Liquid: ₹${sim.current.liquidMoney.toLocaleString("en-IN")} ➔ *₹${sim.simulated.liquidMoney.toLocaleString("en-IN")}*\n` +
+      `• Safe Daily Spend: ₹${sim.current.safeDaily.toLocaleString("en-IN")}/day ➔ *₹${sim.simulated.safeDaily.toLocaleString("en-IN")}/day*\n` +
+      `• Discretionary Surplus: ₹${sim.current.discretionary.toLocaleString("en-IN")} ➔ *₹${sim.simulated.discretionary.toLocaleString("en-IN")}*\n` +
       `• Risk Level: ${sim.impact.riskChange}\n\n` +
       `💡 *CFO Verdict:*\n${sim.recommendation}\n\n` +
-      `🔒 _This is a zero-risk simulation. No actual account data was modified._`;
+      `🔒 _Zero-risk simulation. No actual account data was modified._`;
 
     await ctx.reply(msg, { parse_mode: "Markdown" });
   } catch (err) {
@@ -255,7 +388,7 @@ async function handleWhatIfSimulation(ctx, text) {
   }
 }
 bot.command("whatif", (ctx) => handleWhatIfSimulation(ctx, ctx.message.text));
-bot.hears("🔮 What If? Simulator", (ctx) => ctx.reply("🔮 *What would you like to simulate?*\n\n• _'What if I spend ₹5,000 today?'_\n• _'What if my salary is ₹35,000 next month?'_\n• _'What if I buy a laptop for ₹60,000 on 12 months EMI?'_", { parse_mode: "Markdown" }));
+bot.hears("🔮 What If? Simulator", (ctx) => ctx.reply("🔮 *What would you like to simulate?*\n\n• _'What if I buy earphones for 1299 next month?'_\n• _'What if I spend ₹5,000 this weekend?'_\n• _'What if my salary is ₹35,000 next month?'_\n• _'What if I buy a laptop for ₹60,000 on 12 months EMI?'_", { parse_mode: "Markdown" }));
 
 // ─── ACTION: 30-DAY CASH FLOW FORECAST ──────────────────────────────────────
 async function handleForecastQuery(ctx) {
@@ -555,34 +688,32 @@ bot.action(/^undo_(.+)$/, async (ctx) => {
 // ─── COMMAND: /help ─────────────────────────────────────────────────────────
 bot.command("help", async (ctx) => {
   const msg = `💡 *OrbitLife AI Personal CFO Cheatsheet (₹ INR)*\n\n` +
-    `*1. Financial Intelligence & Decisions:*\n` +
+    `*1. Financial Decisions & What-If:*\n` +
     `• _"Can I afford ₹4,999 headphones?"_\n` +
+    `• _"What if I buy earphones for 1299 next month?"_\n` +
     `• _"How much can I safely spend today?"_\n` +
-    `• _"What if I spend ₹5,000 today?"_\n` +
-    `• _/safetospend - Calculate safe daily limits_\n` +
-    `• _/forecast - 30-day forward cash flow_\n` +
-    `• _/health - Check 0-100 financial health score_\n\n` +
+    `• _/safetospend - Safe daily spending limits_\n` +
+    `• _/howtopay <amount> - Smart payment method advice_\n` +
+    `• _/leaks - Detect food/impulse spending drains_\n` +
+    `• _/wealth - Net worth timeline & milestone forecast_\n` +
+    `• _/statement - Export monthly report_\n\n` +
     `*2. Spends & Incomes:*\n` +
     `• _"Spent ₹350 on lunch with UPI"_\n` +
-    `• _"Received ₹29,600 salary"_\n` +
+    `• 📲 *Forward any Bank SMS* to log instantly!\n` +
+    `• ✏️ *Edit your sent message* to auto-correct amount!\n` +
     `• _/undo - Revert last action & restore balance_\n\n` +
     `*3. Credit Card & EMIs:*\n` +
     `• _"Paid ₹2,920 credit card bill from SBI"_\n` +
     `• _"Paid College EMI ₹3,750"_\n` +
     `• _/card - Check limit & utilization_\n` +
     `• _/emis - Check loans & tenure_\n\n` +
-    `*4. Borrow & Lend:*\n` +
-    `• _"Shamveel paid remaining ₹2,500 to SBI"_\n` +
-    `• _"Lent ₹2,000 to Rahul"_\n` +
-    `• _/debts - View active debt balances_\n\n` +
-    `*5. Multimodal Vision & Voice:*\n` +
+    `*4. Multimodal Vision & Voice:*\n` +
     `• 🎙️ Send any Voice Message to log or ask questions!\n` +
     `• 🧾 Snap any receipt or payment screenshot!`;
 
   await ctx.reply(msg, { parse_mode: "Markdown" });
 });
 bot.hears("❓ Help & Commands", (ctx) => ctx.telegram.sendMessage(ctx.chat.id, "/help"));
-bot.hears("📸 Scan Receipt", (ctx) => ctx.reply("📸 *Snap a photo of any receipt, bill, or payment screenshot!*", { parse_mode: "Markdown" }));
 
 // ─── PHOTO HANDLER (Receipt OCR & Food Vision) ──────────────────────────────
 bot.on("photo", async (ctx) => {
@@ -727,6 +858,37 @@ bot.on("text", async (ctx) => {
     return ctx.reply("⚠️ Please link your account first using `/link <YOUR_USER_ID>`.");
   }
 
+  // 1. Check if user forwarded a Bank SMS
+  const bankSms = parseBankSms(text);
+  if (bankSms && bankSms.isBankSms) {
+    try {
+      if (bankSms.type === "EXPENSE") {
+        const exp = await logExpense(userId, {
+          amount: bankSms.amount,
+          description: bankSms.merchant,
+          category: bankSms.category,
+          account: bankSms.account,
+          source: "bank_sms",
+        });
+
+        let reply = `📲 *Bank SMS Auto-Parsed & Logged!*\n\n` +
+          `🏪 *Merchant:* ${bankSms.merchant}\n` +
+          `💰 *Amount:* ₹${bankSms.amount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}\n` +
+          `🏦 *Account:* ${bankSms.account}\n` +
+          `📁 *Category:* ${bankSms.category}\n` +
+          (bankSms.balanceAfter !== null ? `💳 *Live Balance:* ₹${bankSms.balanceAfter.toLocaleString("en-IN")}\n\n` : "\n") +
+          `_Synced across OrbitLife!_`;
+
+        return ctx.reply(reply, {
+          parse_mode: "Markdown",
+          ...Markup.inlineKeyboard([[Markup.button.callback("↩️ Undo This", `undo_${exp.id}`)]]),
+        });
+      }
+    } catch (err) {
+      console.warn("Error processing Bank SMS:", err.message);
+    }
+  }
+
   return await handleFinancialIntent(ctx, userId, text);
 });
 
@@ -755,7 +917,6 @@ async function handleFinancialIntent(ctx, userId, text) {
     // 2. WHAT-IF SCENARIO SIMULATION
     if (parsed.intent === "WHAT_IF") {
       const sim = simulateScenario(userData, parsed.data);
-      const isNextCycle = sim.timing === "NEXT_MONTH" || sim.timing === "AFTER_SALARY";
 
       const msg = `🔮 *OrbitLife Scenario Simulation*\n\n` +
         `📝 *Scenario:* _${sim.summaryText}_\n\n` +
@@ -795,7 +956,30 @@ async function handleFinancialIntent(ctx, userId, text) {
       return handleHealthScoreQuery(ctx);
     }
 
-    // 8. SET PREFERENCE / GOAL
+    // 8. PAYMENT ADVICE ("Should I pay via UPI or Card?")
+    if (parsed.intent === "PAYMENT_ADVICE") {
+      const amt = parsed.data?.amount || 1000;
+      const merchant = parsed.data?.merchant || "";
+      return handlePaymentAdvice(ctx, amt, merchant);
+    }
+
+    // 9. WEALTH PROJECTION & MILESTONES
+    if (parsed.intent === "WEALTH_PROJECTION") {
+      return handleWealthQuery(ctx);
+    }
+
+    // 10. MONEY LEAKS
+    if (parsed.intent === "MONEY_LEAKS") {
+      return handleLeaksQuery(ctx);
+    }
+
+    // 11. EXPORT STATEMENT
+    if (parsed.intent === "EXPORT_STATEMENT") {
+      const month = parsed.data?.month || null;
+      return handleStatementQuery(ctx, month);
+    }
+
+    // 12. SET PREFERENCE / GOAL
     if (parsed.intent === "SET_PREFERENCE") {
       const updated = await updatePreferences(userId, parsed.data);
       return ctx.reply(
@@ -821,7 +1005,7 @@ async function handleFinancialIntent(ctx, userId, text) {
       );
     }
 
-    // 9. ALERTS
+    // 13. ALERTS
     if (parsed.intent === "ALERTS") {
       const alerts = evaluateAlerts(userData);
       if (alerts.length === 0) {
@@ -834,7 +1018,7 @@ async function handleFinancialIntent(ctx, userId, text) {
       return ctx.reply(alertMsg, { parse_mode: "Markdown" });
     }
 
-    // 10. PAY EMI
+    // 14. PAY EMI
     if (parsed.intent === "PAY_EMI") {
       const { emiName, amount, account } = parsed.data;
       const res = await payEmi(userId, { emiTitle: emiName, amount, accountName: account });
@@ -848,7 +1032,7 @@ async function handleFinancialIntent(ctx, userId, text) {
       return ctx.reply(reply, { parse_mode: "Markdown" });
     }
 
-    // 11. DEBT UPDATE (Lend/Borrow Repayment)
+    // 15. DEBT UPDATE (Lend/Borrow Repayment)
     if (parsed.intent === "DEBT_UPDATE") {
       const res = await handleDebtUpdate(userId, {
         ...parsed.data,
@@ -874,7 +1058,7 @@ async function handleFinancialIntent(ctx, userId, text) {
       }
     }
 
-    // 12. PAY CREDIT CARD BILL
+    // 16. PAY CREDIT CARD BILL
     if (parsed.intent === "PAY_CARD_BILL") {
       const { amount, account } = parsed.data;
       const res = await payCreditCardBill(userId, { amount, accountName: account });
@@ -887,7 +1071,7 @@ async function handleFinancialIntent(ctx, userId, text) {
       return ctx.reply(reply, { parse_mode: "Markdown" });
     }
 
-    // 13. TRANSFER
+    // 17. TRANSFER
     if (parsed.intent === "TRANSFER") {
       const { amount, fromAccount, toAccount, date, notes } = parsed.data;
       const res = await logTransfer(userId, {
@@ -905,7 +1089,7 @@ async function handleFinancialIntent(ctx, userId, text) {
       return ctx.reply(reply, { parse_mode: "Markdown" });
     }
 
-    // 14. EXPENSE
+    // 18. EXPENSE
     if (parsed.intent === "EXPENSE") {
       const exp = await logExpense(userId, {
         amount: parsed.data.amount,
@@ -922,7 +1106,7 @@ async function handleFinancialIntent(ctx, userId, text) {
       });
     }
 
-    // 15. INCOME
+    // 19. INCOME
     if (parsed.intent === "INCOME") {
       const inc = await logIncome(userId, {
         amount: parsed.data.amount,
@@ -937,7 +1121,7 @@ async function handleFinancialIntent(ctx, userId, text) {
       });
     }
 
-    // 16. SET BALANCE
+    // 20. SET BALANCE
     if (parsed.intent === "SET_BALANCE") {
       const { accountName, balance } = parsed.data;
       const res = await setAccountBalance(userId, { accountName: accountName || "SBI", balance });
@@ -950,7 +1134,7 @@ async function handleFinancialIntent(ctx, userId, text) {
       return ctx.reply(reply, { parse_mode: "Markdown" });
     }
 
-    // 17. UNDO LAST
+    // 21. UNDO LAST
     if (parsed.intent === "UNDO") {
       const res = await undoLastTransaction(userId);
       const reply = `↩️ *Transaction Undone & Reverted!*\n\n` +
@@ -961,7 +1145,7 @@ async function handleFinancialIntent(ctx, userId, text) {
       return ctx.reply(reply, { parse_mode: "Markdown" });
     }
 
-    // 18. EDIT LAST TRANSACTION
+    // 22. EDIT LAST TRANSACTION
     if (parsed.intent === "EDIT_TRANSACTION") {
       const res = await editLastTransaction(userId, parsed.data);
       const reply = `✏️ *Transaction Corrected!*\n\n` +
@@ -976,7 +1160,7 @@ async function handleFinancialIntent(ctx, userId, text) {
       });
     }
 
-    // 18. MEAL & MILEAGE
+    // 23. MEAL & MILEAGE
     if (parsed.intent === "MEAL") {
       const meal = await logMeal(userId, parsed.data);
       return ctx.reply(`🥗 *Meal Logged!*\n\n🍽️ *Food:* ${meal.name}\n🔥 *Calories:* ${meal.calories} kcal\n🥩 *Protein:* ${meal.protein}g | 🍚 *Carbs:* ${meal.carbs}g | 🥑 *Fat:* ${meal.fat}g`, { parse_mode: "Markdown" });
@@ -987,7 +1171,7 @@ async function handleFinancialIntent(ctx, userId, text) {
       return ctx.reply(`⛽ *Mileage Logged!*\n\n🚗 *Odometer:* ${entry.odometer} km\n🛢️ *Fuel:* ${entry.liters} L\n💰 *Cost:* ₹${entry.totalCost.toLocaleString("en-IN", { minimumFractionDigits: 2 })}`, { parse_mode: "Markdown" });
     }
 
-    // 19. QUERY ROUTING
+    // 24. QUERY ROUTING
     if (parsed.intent === "QUERY") {
       const type = parsed.data?.queryType;
       if (type === "balance") return handleBalanceQuery(ctx);
@@ -997,7 +1181,7 @@ async function handleFinancialIntent(ctx, userId, text) {
       return handleStatsQuery(ctx);
     }
 
-    return ctx.reply("🤖 I'm here to help! Ask me anything like _'How much can I spend today?'_, _'Can I afford ₹3,000?'_, or send `/help`.", { parse_mode: "Markdown" });
+    return ctx.reply("🤖 I'm here to help! Ask me anything like _'How much can I spend today?'_, _'Where is my money leaking?'_, _'When will I reach 1 Lakh net worth?'_, or send `/help`.", { parse_mode: "Markdown" });
   } catch (err) {
     return ctx.reply(`❌ *Error:* ${err.message}`, { parse_mode: "Markdown" });
   }
