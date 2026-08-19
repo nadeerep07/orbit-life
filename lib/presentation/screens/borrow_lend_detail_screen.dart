@@ -25,9 +25,12 @@ class BorrowLendDetailScreen extends StatelessWidget {
     final viewModel = context.watch<BorrowLendViewModel>();
     final accountsVM = context.watch<AccountsViewModel>();
 
-    final personEntries = viewModel.entries
-        .where((e) => e.phoneNumber == phoneNumber)
-        .toList();
+    final personEntries = viewModel.entries.where((e) {
+      if (phoneNumber.isNotEmpty && e.phoneNumber.isNotEmpty) {
+        return e.phoneNumber == phoneNumber;
+      }
+      return e.personName.toLowerCase() == personName.toLowerCase();
+    }).toList();
 
     double totalLent = 0;
     double totalReceived = 0;

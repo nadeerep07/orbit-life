@@ -44,7 +44,7 @@ class _BorrowLendScreenState extends State<BorrowLendScreen>
     double totalBorrowed = 0;
     for (var e in viewModel.entries) {
       if (e.status == 'pending') {
-        if (e.type == 'lent') totalLent += e.amount;
+        if (e.type == 'lent' || e.type == 'lend') totalLent += e.amount;
         else totalBorrowed += e.amount;
       }
     }
@@ -237,13 +237,17 @@ class _BorrowLendList extends StatelessWidget {
       );
     }
 
-    final allEntries = viewModel.entries.where((e) => e.type == type).toList();
+    final allEntries = viewModel.entries.where((e) {
+      if (type == 'lent') return e.type == 'lent' || e.type == 'lend';
+      return e.type == 'borrowed' || e.type == 'borrow';
+    }).toList();
 
-    // Group by phone number
+    // Group by phone number or person name
     final Map<String, List<BorrowLendEntity>> grouped = {};
     for (var e in allEntries) {
       if (e.status == 'pending') {
-        grouped.putIfAbsent(e.phoneNumber, () => []).add(e);
+        final key = e.phoneNumber.isNotEmpty ? e.phoneNumber : (e.personName.isNotEmpty ? e.personName : e.id);
+        grouped.putIfAbsent(key, () => []).add(e);
       }
     }
 

@@ -21,6 +21,11 @@ const {
   getSummary,
   addAccount,
   logTransfer,
+  setAccountBalance,
+  undoLastTransaction,
+  deleteTransactionById,
+  editLastTransaction,
+  getRecentTransactions,
 } = require("./services/firebase");
 
 const { parseTextMessage, analyzeImage } = require("./services/ai");
@@ -321,6 +326,116 @@ bot.command("addaccount", async (ctx) => {
   }
 });
 
+// ─── COMMAND: /setbalance (Direct Balance Fix / Correction) ────────────────
+bot.command("setbalance", async (ctx) => {
+  const chatId = ctx.chat.id;
+  const userId = await getUserIdByChatId(chatId);
+  if (!userId) return ctx.reply("⚠️ Link account first using `/link YOUR_USER_ID`.");
+
+  const text = ctx.message.text.replace("/setbalance", "").trim();
+  const parts = text.split(/\s+/);
+  if (parts.length < 2) {
+    return ctx.reply(
+      "💡 *Usage:* `/setbalance <Account Name> <New Balance>`\n\n" +
+      "• Example: `/setbalance SBI 3312.60`\n" +
+      "• Example: `/setbalance HDFC 1500`\n" +
+      "• Example: `/setbalance Cash 500`\n" +
+      "• Or just type in natural language: _'Set SBI balance to 3312.60'_",
+      { parse_mode: "Markdown" }
+    );
+  }
+
+  const newBal = parts[parts.length - 1];
+  const accName = parts.slice(0, -1).join(" ");
+
+  try {
+    const res = await setAccountBalance(userId, { accountName: accName, balance: newBal });
+    const reply = `🏦 *Account Balance Corrected!*\n\n` +
+      `📌 *Account:* 🏦 ${res.accountName}\n` +
+      `🔄 *Old Balance:* ₹${res.oldBalance.toLocaleString("en-IN", { minimumFractionDigits: 2 })}\n` +
+      `✅ *New Live Balance:* ₹${res.newBalance.toLocaleString("en-IN", { minimumFractionDigits: 2 })}\n` +
+      `📊 *Adjustment:* ${res.difference >= 0 ? "+" : "-"}₹${Math.abs(res.difference).toLocaleString("en-IN", { minimumFractionDigits: 2 })}\n\n` +
+      `_Synced across your OrbitLife App in real time!_`;
+    return ctx.reply(reply, { parse_mode: "Markdown" });
+  } catch (err) {
+    return ctx.reply(`❌ *Error:* ${err.message}`, { parse_mode: "Markdown" });
+  }
+});
+
+// ─── COMMAND: /undo (Revert Last Action) ────────────────────────────────────
+bot.command("undo", async (ctx) => {
+  const chatId = ctx.chat.id;
+  const userId = await getUserIdByChatId(chatId);
+  if (!userId) return ctx.reply("⚠️ Link account first using `/link YOUR_USER_ID`.");
+
+  try {
+    const res = await undoLastTransaction(userId);
+    const reply = `↩️ *Transaction Undone & Reverted!*\n\n` +
+      `📝 *Reverted:* ${res.description}\n` +
+      `💰 *Amount:* ₹${res.amount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}\n` +
+      (res.restoredBalance !== null ? `🏦 *${res.restoredAccountName} Restored Balance:* ₹${res.restoredBalance.toLocaleString("en-IN", { minimumFractionDigits: 2 })}\n\n` : "\n") +
+      `_Synced across your OrbitLife App in real time!_`;
+    return ctx.reply(reply, { parse_mode: "Markdown" });
+  } catch (err) {
+    return ctx.reply(`❌ *Undo Error:* ${err.message}`, { parse_mode: "Markdown" });
+  }
+});
+
+// ─── COMMAND: /recent or /transactions ─────────────────────────────────────
+async function handleRecentTransactions(ctx) {
+  const chatId = ctx.chat.id;
+  const userId = await getUserIdByChatId(chatId);
+  if (!userId) return ctx.reply("⚠️ Link account first using `/link YOUR_USER_ID`.");
+
+  try {
+    const list = await getRecentTransactions(userId, 5);
+    if (list.length === 0) {
+      return ctx.reply("📝 No recent transactions found.");
+    }
+
+    let text = `📜 *Recent 5 Transactions:*\n\n`;
+    const buttons = [];
+
+    list.forEach((t, idx) => {
+      const amtStr = Number(t.amount || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 });
+      const desc = t.description || t.title || t.categoryOrSource || "Transaction";
+      const typeIcon = t.type === "income" ? "🟢" : t.type === "transfer" ? "🔄" : "🔴";
+      const dateStr = t.date ? new Date(t.date).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }) : "";
+      
+      text += `${idx + 1}. ${typeIcon} *${desc}* — ₹${amtStr} (${t.accountId || "Bank"}) ${dateStr}\n`;
+      buttons.push([Markup.button.callback(`🗑️ Undo #${idx + 1} (₹${amtStr})`, `undo_${t.id}`)]);
+    });
+
+    text += `\n_Tap a button below to quickly delete or undo any entry._`;
+    return ctx.reply(text, { parse_mode: "Markdown", ...Markup.inlineKeyboard(buttons) });
+  } catch (err) {
+    return ctx.reply(`❌ *Error:* ${err.message}`, { parse_mode: "Markdown" });
+  }
+}
+bot.command("recent", handleRecentTransactions);
+bot.command("transactions", handleRecentTransactions);
+
+// ─── ACTION CALLBACK: Undo Specific Transaction ───────────────────────────
+bot.action(/^undo_(.+)$/, async (ctx) => {
+  const txId = ctx.match[1];
+  const chatId = ctx.chat?.id || ctx.callbackQuery?.message?.chat?.id;
+  const userId = await getUserIdByChatId(chatId);
+  if (!userId) return ctx.answerCbQuery("Account not linked!");
+
+  try {
+    const res = await deleteTransactionById(userId, txId);
+    await ctx.answerCbQuery("✅ Transaction undone!");
+    const reply = `↩️ *Transaction Undone & Balance Restored!*\n\n` +
+      `📝 *Reverted:* ${res.description}\n` +
+      `💰 *Amount:* ₹${res.amount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}\n` +
+      (res.restoredBalance !== null ? `🏦 *${res.restoredAccountName} Restored Balance:* ₹${res.restoredBalance.toLocaleString("en-IN", { minimumFractionDigits: 2 })}\n\n` : "\n") +
+      `_Synced across your OrbitLife App in real time!_`;
+    return ctx.reply(reply, { parse_mode: "Markdown" });
+  } catch (err) {
+    return ctx.answerCbQuery(`Error: ${err.message}`);
+  }
+});
+
 // ─── COMMAND: /help ─────────────────────────────────────────────────────────
 bot.command("help", async (ctx) => {
   const msg = `💡 *OrbitLife Telegram Full Automation Cheatsheet (₹ INR)*\n\n` +
@@ -442,13 +557,14 @@ bot.on("text", async (ctx) => {
       return ctx.reply(reply, { parse_mode: "Markdown" });
     }
 
-    // 2. MARK EMI PAID
+    // 2. PAY EMI
     if (parsed.intent === "PAY_EMI") {
       const { emiName, amount, account } = parsed.data;
       const res = await payEmi(userId, { emiName: emiName || "EMI", amount, accountName: account });
-      const reply = `✅ *EMI Payment Recorded!*\n\n` +
+      const reply = `🏦 *EMI Paid Successfully!*\n\n` +
         `📌 *Loan:* ${res.emiTitle}\n` +
         `💰 *Amount Paid:* ₹${res.amountPaid.toLocaleString("en-IN", { minimumFractionDigits: 2 })}\n` +
+        (res.fromAccountName ? `📤 *Paid From:* 🏦 ${res.fromAccountName} (Bal: ₹${res.fromNewBalance.toLocaleString("en-IN", { minimumFractionDigits: 2 })})\n` : "") +
         `📅 *Payments Made:* ${res.paidMonths} months\n` +
         `⏳ *Remaining Tenure:* ${res.remainingMonths} months left\n\n` +
         `_Deduction logged and synced to your app!_`;
@@ -457,19 +573,26 @@ bot.on("text", async (ctx) => {
 
     // 3. DEBT REPAYMENT / SETTLEMENT OR NEW DEBT
     if (parsed.intent === "DEBT_UPDATE") {
-      const res = await handleDebtUpdate(userId, parsed.data);
+      const res = await handleDebtUpdate(userId, {
+        ...parsed.data,
+        accountName: parsed.data.account,
+      });
       if (res.isSettled !== undefined) {
-        const reply = `🤝 *Debt Settlement Recorded!*\n\n` +
+        const isLend = res.type === "lend" || res.type === "lent";
+        const reply = `🤝 *Debt ${isLend ? "Repayment Received" : "Payment Made"}!*\n\n` +
           `👤 *Person:* ${res.personName}\n` +
-          `💰 *Amount Received/Paid:* ₹${res.amountSettled.toLocaleString("en-IN", { minimumFractionDigits: 2 })}\n` +
-          `📊 *Remaining Balance:* ₹${res.remainingDebt.toLocaleString("en-IN", { minimumFractionDigits: 2 })}\n` +
-          `✨ *Status:* ${res.isSettled ? "Fully Settled 🎉" : "Partially Paid"}`;
+          `💰 *Amount:* ₹${res.amountSettled.toLocaleString("en-IN", { minimumFractionDigits: 2 })}\n` +
+          (res.toAccountName ? `${isLend ? "📥 *Credited To:*" : "📤 *Paid From:*"} 🏦 ${res.toAccountName} (Bal: ₹${res.toNewBalance.toLocaleString("en-IN", { minimumFractionDigits: 2 })})\n` : "") +
+          `📊 *Remaining Debt:* ₹${res.remainingDebt.toLocaleString("en-IN", { minimumFractionDigits: 2 })}\n` +
+          `✨ *Status:* ${res.isSettled ? "Fully Settled 🎉" : "Partially Paid"}\n\n` +
+          `_Synced across your OrbitLife App in real time!_`;
         return ctx.reply(reply, { parse_mode: "Markdown" });
       } else {
         const reply = `🤝 *New ${res.type === "borrow" ? "Borrow" : "Lend"} Record Added!*\n\n` +
           `👤 *Person:* ${res.personName}\n` +
           `💰 *Amount:* ₹${res.amount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}\n` +
-          `📌 *Type:* ${res.type === "borrow" ? "You Borrowed" : "You Lent"}`;
+          `📌 *Type:* ${res.type === "borrow" ? "You Borrowed" : "You Lent"}\n\n` +
+          `_Synced across your OrbitLife App in real time!_`;
         return ctx.reply(reply, { parse_mode: "Markdown" });
       }
     }
@@ -480,8 +603,10 @@ bot.on("text", async (ctx) => {
       const res = await payCreditCardBill(userId, { amount, accountName: account });
       const reply = `💳 *Credit Card Bill Paid!*\n\n` +
         `💰 *Amount Paid:* ₹${res.amountPaid.toLocaleString("en-IN", { minimumFractionDigits: 2 })}\n` +
+        (res.fromAccountName ? `📤 *Paid From:* 🏦 ${res.fromAccountName} (Bal: ₹${res.fromNewBalance.toLocaleString("en-IN", { minimumFractionDigits: 2 })})\n` : "") +
         `🟢 *Available Credit Restored:* ₹${res.newAvailableCredit.toLocaleString("en-IN", { minimumFractionDigits: 2 })}\n` +
-        `🔴 *Remaining Used Credit:* ₹${res.newUsedCredit.toLocaleString("en-IN", { minimumFractionDigits: 2 })}`;
+        `🔴 *Remaining Used Credit:* ₹${res.newUsedCredit.toLocaleString("en-IN", { minimumFractionDigits: 2 })}\n\n` +
+        `_Synced across your OrbitLife App in real time!_`;
       return ctx.reply(reply, { parse_mode: "Markdown" });
     }
 
@@ -524,7 +649,11 @@ bot.on("text", async (ctx) => {
         date: parsed.data.date,
         source: "telegram_text",
       });
-      return ctx.reply(`💸 *Expense Logged!*\n\n📝 *Item:* ${exp.description}\n💰 *Amount:* ₹${exp.amount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}\n📁 *Category:* ${exp.categoryId}\n💳 *Account:* ${exp.accountId}`, { parse_mode: "Markdown" });
+      const reply = `💸 *Expense Logged!*\n\n📝 *Item:* ${exp.description}\n💰 *Amount:* ₹${exp.amount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}\n📁 *Category:* ${exp.categoryId}\n💳 *Account:* ${exp.accountId}`;
+      return ctx.reply(reply, {
+        parse_mode: "Markdown",
+        ...Markup.inlineKeyboard([[Markup.button.callback("↩️ Undo This", `undo_${exp.id}`)]])
+      });
     }
 
     // 6. INCOME
@@ -535,22 +664,62 @@ bot.on("text", async (ctx) => {
         account: parsed.data.account || "Default",
         date: parsed.data.date,
       });
-      return ctx.reply(`🟢 *Income Logged!*\n\n💵 *Source:* ${inc.source}\n💰 *Amount:* ₹${inc.amount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}`, { parse_mode: "Markdown" });
+      const reply = `🟢 *Income Logged!*\n\n💵 *Source:* ${inc.source}\n💰 *Amount:* ₹${inc.amount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}`;
+      return ctx.reply(reply, {
+        parse_mode: "Markdown",
+        ...Markup.inlineKeyboard([[Markup.button.callback("↩️ Undo This", `undo_${inc.id}`)]])
+      });
     }
 
-    // 7. MEAL
+    // 7. SET / EDIT ACCOUNT BALANCE
+    if (parsed.intent === "SET_BALANCE") {
+      const { accountName, balance } = parsed.data;
+      const res = await setAccountBalance(userId, { accountName: accountName || "SBI", balance });
+      const reply = `🏦 *Account Balance Corrected!*\n\n` +
+        `📌 *Account:* 🏦 ${res.accountName}\n` +
+        `🔄 *Old Balance:* ₹${res.oldBalance.toLocaleString("en-IN", { minimumFractionDigits: 2 })}\n` +
+        `✅ *New Live Balance:* ₹${res.newBalance.toLocaleString("en-IN", { minimumFractionDigits: 2 })}\n` +
+        `📊 *Adjustment:* ${res.difference >= 0 ? "+" : "-"}₹${Math.abs(res.difference).toLocaleString("en-IN", { minimumFractionDigits: 2 })}\n\n` +
+        `_Synced across your OrbitLife App in real time!_`;
+      return ctx.reply(reply, { parse_mode: "Markdown" });
+    }
+
+    // 8. UNDO LAST ACTION
+    if (parsed.intent === "UNDO") {
+      const res = await undoLastTransaction(userId);
+      const reply = `↩️ *Transaction Undone & Reverted!*\n\n` +
+        `📝 *Reverted:* ${res.description}\n` +
+        `💰 *Amount:* ₹${res.amount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}\n` +
+        (res.restoredBalance !== null ? `🏦 *${res.restoredAccountName} Restored Balance:* ₹${res.restoredBalance.toLocaleString("en-IN", { minimumFractionDigits: 2 })}\n\n` : "\n") +
+        `_Synced across your OrbitLife App in real time!_`;
+      return ctx.reply(reply, { parse_mode: "Markdown" });
+    }
+
+    // 9. EDIT LAST TRANSACTION
+    if (parsed.intent === "EDIT_TRANSACTION") {
+      const res = await editLastTransaction(userId, parsed.data);
+      const reply = `✏️ *Transaction Updated & Corrected!*\n\n` +
+        `📝 *Item:* ${res.description}\n` +
+        `💰 *New Amount:* ₹${res.amount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}\n` +
+        `🏦 *Account:* ${res.account}\n` +
+        `📁 *Category:* ${res.category}\n\n` +
+        `_Account balances updated and synced!_`;
+      return ctx.reply(reply, { parse_mode: "Markdown" });
+    }
+
+    // 10. MEAL
     if (parsed.intent === "MEAL") {
       const meal = await logMeal(userId, parsed.data);
       return ctx.reply(`🥗 *Meal Logged!*\n\n🍽️ *Food:* ${meal.name}\n🔥 *Calories:* ${meal.calories} kcal\n🥩 *Protein:* ${meal.protein}g | 🍚 *Carbs:* ${meal.carbs}g | 🥑 *Fat:* ${meal.fat}g`, { parse_mode: "Markdown" });
     }
 
-    // 8. MILEAGE
+    // 11. MILEAGE
     if (parsed.intent === "MILEAGE") {
       const entry = await logMileage(userId, parsed.data);
       return ctx.reply(`⛽ *Mileage Logged!*\n\n🚗 *Odometer:* ${entry.odometer} km\n🛢️ *Fuel:* ${entry.liters} L\n💰 *Cost:* ₹${entry.totalCost.toLocaleString("en-IN", { minimumFractionDigits: 2 })}`, { parse_mode: "Markdown" });
     }
 
-    // 9. QUERY ROUTING
+    // 12. QUERY ROUTING
     if (parsed.intent === "QUERY") {
       const type = parsed.data?.queryType;
       if (type === "balance") return handleBalanceQuery(ctx);

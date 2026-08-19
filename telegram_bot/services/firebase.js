@@ -157,23 +157,38 @@ function resolveCategoryAndAccount(userData, categoryName, accountName) {
 
   let categoryId = "general";
   if (categoryName && categories.length > 0) {
+    const search = categoryName.toLowerCase().trim();
     const matched = categories.find(
-      (c) => c.name && c.name.toLowerCase().includes(categoryName.toLowerCase())
+      (c) => (c.name && c.name.toLowerCase().includes(search)) ||
+             (c.id && c.id.toLowerCase() === search) ||
+             (c.name && search.includes(c.name.toLowerCase()))
     );
     if (matched) categoryId = matched.id || matched.name;
   }
 
   let accountId = "default";
+  let matchedAccount = null;
   if (accountName && accounts.length > 0) {
-    const matched = accounts.find(
-      (a) => a.name && a.name.toLowerCase().includes(accountName.toLowerCase())
+    const search = accountName.toLowerCase().trim();
+    matchedAccount = accounts.find(
+      (a) => (a.name && a.name.toLowerCase().includes(search)) ||
+             (a.id && a.id.toLowerCase() === search) ||
+             (a.name && search.includes(a.name.toLowerCase()))
     );
-    if (matched) accountId = matched.id || matched.name;
-  } else if (accounts.length > 0) {
-    accountId = accounts[0].id || accounts[0].name;
+    if (matchedAccount) accountId = matchedAccount.id || matchedAccount.name;
   }
 
-  return { categoryId, accountId };
+  if (!matchedAccount && accounts.length > 0) {
+    // Default to first liquid bank account
+    matchedAccount = accounts.find(
+      (a) => a.id !== "supermoney" &&
+             !(a.name || "").toLowerCase().includes("credit card") &&
+             !(a.name || "").toLowerCase().includes("supermoney")
+    ) || accounts[0];
+    if (matchedAccount) accountId = matchedAccount.id || matchedAccount.name;
+  }
+
+  return { categoryId, accountId, matchedAccount };
 }
 
 /**
@@ -184,15 +199,16 @@ async function logExpense(userId, { amount, description, category, account, date
   const userRef = firestore.collection("users").doc(userId);
   const userData = await getUserData(userId);
 
-  const { categoryId, accountId } = resolveCategoryAndAccount(userData, category, account);
+  const { categoryId, accountId, matchedAccount } = resolveCategoryAndAccount(userData, category, account);
   const expenseId = uuidv4();
   const transactionId = uuidv4();
   const entryDate = date ? new Date(date) : new Date();
+  const expAmount = Number(amount);
 
   const expenseItem = {
     id: expenseId,
     categoryId: categoryId,
-    amount: Number(amount),
+    amount: expAmount,
     description: description || category || "Expense",
     date: entryDate.toISOString(),
     accountId: accountId,
@@ -203,7 +219,7 @@ async function logExpense(userId, { amount, description, category, account, date
   const transactionItem = {
     id: transactionId,
     title: description || category || "Expense",
-    amount: Number(amount),
+    amount: expAmount,
     date: entryDate.toISOString(),
     type: "expense",
     categoryId: categoryId,
@@ -211,19 +227,33 @@ async function logExpense(userId, { amount, description, category, account, date
     notes: `Logged via Telegram Bot (${source || "manual"})`,
   };
 
+  let accounts = (userData && userData.accounts) || [];
+  const isCreditCard = (account && (account.toLowerCase().includes("card") || account.toLowerCase().includes("supermoney"))) || (matchedAccount && matchedAccount.id === "supermoney");
+
+  if (!isCreditCard && matchedAccount) {
+    accounts = accounts.map((a) => {
+      if (a.id === matchedAccount.id) {
+        return { ...a, openingBalance: (Number(a.openingBalance) || 0) - expAmount };
+      }
+      return a;
+    });
+  }
+
   // If paid via Credit Card, also update Credit Card used limit
   let updatePayload = {
+    accounts: accounts,
     expenses: admin.firestore.FieldValue.arrayUnion(expenseItem),
     transactions: admin.firestore.FieldValue.arrayUnion(transactionItem),
     lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
+    lastBackup: admin.firestore.FieldValue.serverTimestamp(),
   };
 
-  if (account && (account.toLowerCase().includes("card") || account.toLowerCase().includes("supermoney"))) {
+  if (isCreditCard) {
     const cc = userData?.creditCardAccount;
     if (cc) {
       const currentUsed = Number(cc.usedCredit || 0);
       const currentLimit = Number(cc.creditLimit || 26713.8);
-      const newUsed = currentUsed + Number(amount);
+      const newUsed = currentUsed + expAmount;
       updatePayload.creditCardAccount = {
         ...cc,
         usedCredit: newUsed,
@@ -246,15 +276,16 @@ async function logIncome(userId, { amount, source, account, date }) {
   const userRef = firestore.collection("users").doc(userId);
   const userData = await getUserData(userId);
 
-  const { accountId } = resolveCategoryAndAccount(userData, null, account);
+  const { accountId, matchedAccount } = resolveCategoryAndAccount(userData, null, account);
   const incomeId = uuidv4();
   const transactionId = uuidv4();
   const entryDate = date ? new Date(date) : new Date();
+  const incAmount = Number(amount);
 
   const incomeItem = {
     id: incomeId,
     source: source || "Income",
-    amount: Number(amount),
+    amount: incAmount,
     date: entryDate.toISOString(),
     accountId: accountId,
   };
@@ -262,18 +293,30 @@ async function logIncome(userId, { amount, source, account, date }) {
   const transactionItem = {
     id: transactionId,
     title: source || "Income",
-    amount: Number(amount),
+    amount: incAmount,
     date: entryDate.toISOString(),
     type: "income",
     accountId: accountId,
     notes: "Logged via Telegram Bot",
   };
 
+  let accounts = (userData && userData.accounts) || [];
+  if (matchedAccount) {
+    accounts = accounts.map((a) => {
+      if (a.id === matchedAccount.id) {
+        return { ...a, openingBalance: (Number(a.openingBalance) || 0) + incAmount };
+      }
+      return a;
+    });
+  }
+
   await userRef.set(
     {
+      accounts: accounts,
       incomes: admin.firestore.FieldValue.arrayUnion(incomeItem),
       transactions: admin.firestore.FieldValue.arrayUnion(transactionItem),
       lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
+      lastBackup: admin.firestore.FieldValue.serverTimestamp(),
     },
     { merge: true }
   );
@@ -348,6 +391,7 @@ async function payEmi(userId, { emiName, amount, accountName }) {
   const userRef = firestore.collection("users").doc(userId);
   const userData = await getUserData(userId);
   const emis = (userData && userData.emis) || [];
+  const accounts = (userData && userData.accounts) || [];
 
   if (emis.length === 0) {
     throw new Error("No active EMIs found in your profile.");
@@ -380,6 +424,23 @@ async function payEmi(userId, { emiName, amount, accountName }) {
     return e;
   });
 
+  const { accountId, matchedAccount } = resolveCategoryAndAccount(userData, null, accountName || targetEmi.accountId);
+
+  let fromAccountName = null;
+  let fromNewBalance = null;
+  let updatedAccounts = accounts;
+
+  if (matchedAccount) {
+    fromAccountName = matchedAccount.name;
+    fromNewBalance = (Number(matchedAccount.openingBalance) || 0) - emiAmount;
+    updatedAccounts = accounts.map((a) => {
+      if (a.id === matchedAccount.id) {
+        return { ...a, openingBalance: fromNewBalance };
+      }
+      return a;
+    });
+  }
+
   // Log as Expense
   const expenseItem = {
     id: uuidv4(),
@@ -387,7 +448,7 @@ async function payEmi(userId, { emiName, amount, accountName }) {
     amount: emiAmount,
     description: `Paid EMI: ${targetEmi.title || targetEmi.loanName}`,
     date: new Date().toISOString(),
-    accountId: accountName || targetEmi.accountId || "bank",
+    accountId: accountId,
     isFromSavings: false,
     source: "emi_paid_bot",
   };
@@ -399,16 +460,18 @@ async function payEmi(userId, { emiName, amount, accountName }) {
     date: new Date().toISOString(),
     type: "expense",
     categoryId: "emi",
-    accountId: accountName || targetEmi.accountId || "bank",
+    accountId: accountId,
     notes: `Marked paid via Telegram Bot (${updatedRemainingMonths} months remaining)`,
   };
 
   await userRef.set(
     {
       emis: updatedEmis,
+      accounts: updatedAccounts,
       expenses: admin.firestore.FieldValue.arrayUnion(expenseItem),
       transactions: admin.firestore.FieldValue.arrayUnion(transactionItem),
       lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
+      lastBackup: admin.firestore.FieldValue.serverTimestamp(),
     },
     { merge: true }
   );
@@ -418,93 +481,123 @@ async function payEmi(userId, { emiName, amount, accountName }) {
     amountPaid: emiAmount,
     paidMonths: updatedPaidMonths,
     remainingMonths: updatedRemainingMonths,
+    fromAccountName,
+    fromNewBalance,
   };
 }
 
 /**
  * Handle Borrow / Lend update (Repayment or new debt)
  */
-async function handleDebtUpdate(userId, { personName, amount, type, action, contact }) {
+async function handleDebtUpdate(userId, { personName, amount, type, action, contact, accountName }) {
   const firestore = getDb();
   const userRef = firestore.collection("users").doc(userId);
   const userData = await getUserData(userId);
   const borrowLends = (userData && userData.borrowLends) || [];
+  const accounts = (userData && userData.accounts) || [];
   const now = new Date().toISOString();
+
+  // Resolve receiving / source account (defaulting to SBI / primary bank or cash)
+  const { accountId, matchedAccount } = resolveCategoryAndAccount(userData, null, accountName || "SBI");
+  const targetAccId = matchedAccount ? matchedAccount.id : "default";
 
   // If action is repayment/settlement
   if (action === "settle" || action === "repay") {
-    let target = borrowLends.find(
-      (b) => b.personName && b.personName.toLowerCase().includes((personName || "").toLowerCase())
-    );
+    let target = null;
+    if (personName) {
+      const search = personName.toLowerCase().trim();
+      target = borrowLends.find(
+        (b) => (b.personName && b.personName.toLowerCase().includes(search)) ||
+               (b.note && b.note.toLowerCase().includes(search)) ||
+               (search.includes((b.personName || "").toLowerCase()))
+      );
+    }
+
+    if (!target && borrowLends.length > 0) {
+      target = borrowLends.find((b) => b.status === "pending" || !b.isSettled) || borrowLends[0];
+    }
 
     if (!target) {
-      throw new Error(`Could not find an active debt record for "${personName}".`);
+      throw new Error(`Could not find an active debt record for "${personName || "Friend"}".`);
     }
 
     const payAmount = Number(amount || target.amount || 0);
-    const newAmount = Math.max(0, Number(target.amount || 0) - payAmount);
-    const isSettled = newAmount === 0;
+    const prevSubTxs = target.transactions || [];
+    const prevPaid = prevSubTxs.reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
+    const totalPrincipal = Number(target.amount || 0);
+
+    // Calculate new remaining
+    const newRemaining = Math.max(0, totalPrincipal - prevPaid - payAmount);
+    const isSettled = newRemaining === 0;
+
+    const subTx = {
+      id: uuidv4(),
+      amount: payAmount,
+      type: "repayment",
+      date: now,
+      accountId: targetAccId,
+    };
 
     const updatedBorrowLends = borrowLends.map((b) => {
       if (b.id === target.id) {
         return {
           ...b,
-          amount: newAmount,
-          status: isSettled ? "settled" : "pending",
+          status: isSettled ? "completed" : "pending",
           isSettled: isSettled,
+          transactions: [...prevSubTxs, subTx],
           lastUpdated: now,
         };
       }
       return b;
     });
 
-    // Log transaction
-    const isLend = target.type === "lend";
+    const isLend = target.type === "lend" || target.type === "lent";
+    
+    // Credit or debit the account balance
+    let fromAccountName = null;
+    let fromNewBalance = null;
+    const updatedAccounts = accounts.map((a) => {
+      if (a.id === targetAccId) {
+        const delta = isLend ? payAmount : -payAmount;
+        const newBal = (Number(a.openingBalance) || 0) + delta;
+        fromAccountName = a.name;
+        fromNewBalance = newBal;
+        return { ...a, openingBalance: newBal };
+      }
+      return a;
+    });
+
     const transactionItem = {
       id: uuidv4(),
-      title: isLend ? `Repayment from ${target.personName}` : `Debt Repayment to ${target.personName}`,
       amount: payAmount,
-      date: now,
       type: isLend ? "income" : "expense",
-      accountId: "cash",
-      notes: `Debt settlement recorded via Telegram (${isSettled ? "Fully Settled" : `₹${newAmount} remaining`})`,
+      accountId: targetAccId,
+      targetAccountId: null,
+      categoryOrSource: "Debt Repayment",
+      description: isLend ? `Repayment from ${target.personName}` : `Debt Repayment to ${target.personName}`,
+      date: now,
+      referenceId: target.id,
+      notes: `Debt repayment recorded via Telegram (${isSettled ? "Fully Settled 🎉" : `₹${newRemaining.toLocaleString("en-IN")} remaining`})`,
     };
 
     const updatePayload = {
+      accounts: updatedAccounts,
       borrowLends: updatedBorrowLends,
       transactions: admin.firestore.FieldValue.arrayUnion(transactionItem),
       lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
+      lastBackup: admin.firestore.FieldValue.serverTimestamp(),
     };
-
-    if (isLend) {
-      updatePayload.incomes = admin.firestore.FieldValue.arrayUnion({
-        id: uuidv4(),
-        source: `Repayment from ${target.personName}`,
-        amount: payAmount,
-        date: now,
-        accountId: "cash",
-      });
-    } else {
-      updatePayload.expenses = admin.firestore.FieldValue.arrayUnion({
-        id: uuidv4(),
-        categoryId: "debts",
-        amount: payAmount,
-        description: `Repaid ${target.personName}`,
-        date: now,
-        accountId: "cash",
-        isFromSavings: false,
-        source: "debt_settle",
-      });
-    }
 
     await userRef.set(updatePayload, { merge: true });
 
     return {
       personName: target.personName,
       amountSettled: payAmount,
-      remainingDebt: newAmount,
+      remainingDebt: newRemaining,
       isSettled,
       type: target.type,
+      toAccountName: fromAccountName,
+      toNewBalance: fromNewBalance,
     };
   }
 
@@ -518,7 +611,8 @@ async function handleDebtUpdate(userId, { personName, amount, type, action, cont
     date: now,
     note: `Added via Telegram Bot`,
     status: "pending",
-    accountId: "cash",
+    isSettled: false,
+    accountId: targetAccId,
     transactions: [],
   };
 
@@ -526,6 +620,7 @@ async function handleDebtUpdate(userId, { personName, amount, type, action, cont
     {
       borrowLends: admin.firestore.FieldValue.arrayUnion(debtItem),
       lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
+      lastBackup: admin.firestore.FieldValue.serverTimestamp(),
     },
     { merge: true }
   );
@@ -545,12 +640,17 @@ async function payCreditCardBill(userId, { amount, accountName }) {
   const userRef = firestore.collection("users").doc(userId);
   const userData = await getUserData(userId);
   const cc = userData?.creditCardAccount;
+  const accounts = (userData && userData.accounts) || [];
 
   if (!cc) {
     throw new Error("No Credit Card found in your profile.");
   }
 
   const payAmount = Number(amount || cc.usedCredit || 0);
+  if (payAmount <= 0) {
+    throw new Error("Please specify a valid payment amount greater than 0.");
+  }
+
   const currentUsed = Number(cc.usedCredit || 0);
   const currentLimit = Number(cc.creditLimit || 26713.8);
   const newUsed = Math.max(0, currentUsed - payAmount);
@@ -563,35 +663,49 @@ async function payCreditCardBill(userId, { amount, accountName }) {
     lastUpdated: new Date().toISOString(),
   };
 
-  // Log as Expense from Bank account
-  const expenseItem = {
-    id: uuidv4(),
-    categoryId: "credit_card_bill",
-    amount: payAmount,
-    description: `Credit Card Bill Payment (${cc.name || "Supermoney"})`,
-    date: new Date().toISOString(),
-    accountId: accountName || "bank",
-    isFromSavings: false,
-    source: "cc_bill_pay",
-  };
+  // Resolve source bank account
+  const { accountId, matchedAccount } = resolveCategoryAndAccount(userData, null, accountName);
 
+  let fromAccountName = null;
+  let fromNewBalance = null;
+  let updatedAccounts = accounts;
+
+  if (matchedAccount) {
+    fromAccountName = matchedAccount.name;
+    fromNewBalance = (Number(matchedAccount.openingBalance) || 0) - payAmount;
+    updatedAccounts = accounts.map((a) => {
+      if (a.id === matchedAccount.id) {
+        return { ...a, openingBalance: fromNewBalance };
+      }
+      return a;
+    });
+  }
+
+  const txId = uuidv4();
+  const entryDate = new Date().toISOString();
+
+  // In double-entry accounting and OrbitLife architecture:
+  // Credit card bill payment is a TRANSFER (Bank -> Credit Card Liability), NOT an expense!
+  // Logging it as an expense would double-count purchases already recorded when using the card.
   const transactionItem = {
-    id: uuidv4(),
-    title: `Credit Card Bill Paid`,
+    id: txId,
     amount: payAmount,
-    date: new Date().toISOString(),
-    type: "expense",
-    categoryId: "credit_card_bill",
-    accountId: accountName || "bank",
-    notes: `Credit card bill paid via Telegram. Available Limit restored to ₹${newAvailable.toLocaleString("en-IN")}`,
+    type: "transfer",
+    accountId: accountId,
+    targetAccountId: "supermoney",
+    categoryOrSource: "Credit Card Bill Payment",
+    date: entryDate,
+    description: `Credit card bill paid via Telegram. Available Limit restored to ₹${newAvailable.toLocaleString("en-IN")}`,
+    referenceId: "cc_payment",
   };
 
   await userRef.set(
     {
       creditCardAccount: updatedCc,
-      expenses: admin.firestore.FieldValue.arrayUnion(expenseItem),
+      accounts: updatedAccounts,
       transactions: admin.firestore.FieldValue.arrayUnion(transactionItem),
       lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
+      lastBackup: admin.firestore.FieldValue.serverTimestamp(),
     },
     { merge: true }
   );
@@ -601,6 +715,8 @@ async function payCreditCardBill(userId, { amount, accountName }) {
     newUsedCredit: newUsed,
     newAvailableCredit: newAvailable,
     totalLimit: currentLimit,
+    fromAccountName,
+    fromNewBalance,
   };
 }
 
@@ -761,13 +877,14 @@ async function logTransfer(userId, { amount, fromAccount, toAccount, date, notes
 /**
  * Get Balances & Net Worth
  */
+/**
+ * Get Balances & Net Worth
+ */
 async function getBalances(userId) {
   const userData = await getUserData(userId);
   if (!userData) return null;
 
   const rawAccounts = userData.accounts || [];
-  const expenses = userData.expenses || [];
-  const incomes = userData.incomes || [];
   const cc = userData.creditCardAccount;
   const fds = userData.fdLots || [];
 
@@ -784,18 +901,11 @@ async function getBalances(userId) {
     );
   });
 
-  // Calculate live balances for liquid accounts only
+  // Each liquid account's live balance is stored directly in a.openingBalance
   const detailedAccounts = liquidAccounts.map((a) => {
-    const accIncomes = incomes
-      .filter((i) => i.accountId === a.id)
-      .reduce((sum, i) => sum + (Number(i.amount) || 0), 0);
-    const accExpenses = expenses
-      .filter((e) => e.accountId === a.id)
-      .reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
-    const balance = Number(a.openingBalance || 0) + accIncomes - accExpenses;
     return {
       name: a.name,
-      balance: balance,
+      balance: Number(a.openingBalance || 0),
     };
   });
 
@@ -847,12 +957,20 @@ async function getEmisAndDebts(userId) {
     };
   });
 
-  const borrowLends = (userData.borrowLends || []).filter((b) => !b.isSettled && b.status !== "settled").map((b) => ({
-    personName: b.personName || "Person",
-    amount: Number(b.amount || 0),
-    type: b.type === "borrow" ? "You Owe" : "Owed to You",
-    phoneNumber: b.phoneNumber || "",
-  }));
+  const borrowLends = (userData.borrowLends || []).filter((b) => !b.isSettled && b.status !== "settled" && b.status !== "completed").map((b) => {
+    const totalPrincipal = Number(b.amount || 0);
+    const paidSoFar = (b.transactions || []).reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
+    const remaining = Math.max(0, totalPrincipal - paidSoFar);
+    return {
+      id: b.id,
+      personName: b.personName || "Person",
+      amount: remaining,
+      originalAmount: totalPrincipal,
+      paidAmount: paidSoFar,
+      type: b.type === "borrow" ? "You Owe" : "Owed to You",
+      phoneNumber: b.phoneNumber || "",
+    };
+  });
 
   return { emis, borrowLends };
 }
@@ -1086,6 +1204,301 @@ async function getSummary(userId) {
   };
 }
 
+/**
+ * Adjust or set the live balance of an account directly
+ */
+async function setAccountBalance(userId, { accountName, balance }) {
+  const firestore = getDb();
+  const userRef = firestore.collection("users").doc(userId);
+  const userData = await getUserData(userId);
+
+  if (!userData) throw new Error("User profile not found. Please link your account.");
+
+  const accounts = userData.accounts || [];
+  if (accounts.length === 0) {
+    throw new Error("No accounts found in your profile.");
+  }
+
+  const { accountId, matchedAccount } = resolveCategoryAndAccount(userData, null, accountName);
+  if (!matchedAccount) {
+    const names = accounts.map((a) => a.name).join(", ");
+    throw new Error(`Account "${accountName}" not found. Available accounts: ${names}`);
+  }
+
+  const newBal = Number(balance);
+  if (isNaN(newBal)) {
+    throw new Error("Please specify a valid numeric balance.");
+  }
+
+  const oldBal = Number(matchedAccount.openingBalance || 0);
+  const diff = newBal - oldBal;
+
+  const updatedAccounts = accounts.map((a) => {
+    if (a.id === matchedAccount.id) {
+      return { ...a, openingBalance: newBal };
+    }
+    return a;
+  });
+
+  const txId = uuidv4();
+  const adjTx = {
+    id: txId,
+    amount: Math.abs(diff),
+    type: diff >= 0 ? "income" : "expense",
+    accountId: matchedAccount.id,
+    targetAccountId: null,
+    categoryOrSource: "Balance Adjustment",
+    description: `Manual balance adjustment for ${matchedAccount.name}`,
+    date: new Date().toISOString(),
+    referenceId: "manual_adjustment",
+  };
+
+  await userRef.set(
+    {
+      accounts: updatedAccounts,
+      transactions: admin.firestore.FieldValue.arrayUnion(adjTx),
+      lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
+      lastBackup: admin.firestore.FieldValue.serverTimestamp(),
+    },
+    { merge: true }
+  );
+
+  return {
+    accountName: matchedAccount.name,
+    oldBalance: oldBal,
+    newBalance: newBal,
+    difference: diff,
+  };
+}
+
+/**
+ * Undo / Delete a transaction by ID and reverse its account balance effect
+ */
+async function deleteTransactionById(userId, transactionId) {
+  const firestore = getDb();
+  const userRef = firestore.collection("users").doc(userId);
+  const userData = await getUserData(userId);
+
+  if (!userData) throw new Error("User profile not found.");
+
+  const transactions = userData.transactions || [];
+  const targetTx = transactions.find((t) => t.id === transactionId);
+
+  if (!targetTx) {
+    throw new Error("Transaction not found or already undone.");
+  }
+
+  let accounts = [...(userData.accounts || [])];
+  let expenses = [...(userData.expenses || [])];
+  let incomes = [...(userData.incomes || [])];
+  let transfers = [...(userData.transfers || [])];
+  let cc = userData.creditCardAccount ? { ...userData.creditCardAccount } : null;
+
+  const txAmount = Number(targetTx.amount || 0);
+  const txType = (targetTx.type || "expense").toLowerCase();
+  const accId = targetTx.accountId;
+  const targetAccId = targetTx.targetAccountId;
+
+  // Revert balance changes
+  let restoredAccountName = "Account";
+  let restoredBalance = null;
+
+  if (txType === "expense") {
+    if (accId === "supermoney" && cc) {
+      cc.usedCredit = Math.max(0, (Number(cc.usedCredit) || 0) - txAmount);
+      cc.availableCredit = Math.min(Number(cc.creditLimit || 0), (Number(cc.creditLimit || 0) - cc.usedCredit));
+      restoredAccountName = "Credit Card";
+      restoredBalance = cc.availableCredit;
+    } else {
+      accounts = accounts.map((a) => {
+        if (a.id === accId || (a.name && accId && a.name.toLowerCase() === accId.toLowerCase())) {
+          const newBal = (Number(a.openingBalance) || 0) + txAmount;
+          restoredAccountName = a.name;
+          restoredBalance = newBal;
+          return { ...a, openingBalance: newBal };
+        }
+        return a;
+      });
+    }
+    expenses = expenses.filter((e) => e.id !== transactionId && !(e.amount === txAmount && e.description === (targetTx.description || targetTx.title)));
+  } else if (txType === "income") {
+    accounts = accounts.map((a) => {
+      if (a.id === accId || (a.name && accId && a.name.toLowerCase() === accId.toLowerCase())) {
+        const newBal = (Number(a.openingBalance) || 0) - txAmount;
+        restoredAccountName = a.name;
+        restoredBalance = newBal;
+        return { ...a, openingBalance: newBal };
+      }
+      return a;
+    });
+    incomes = incomes.filter((i) => i.id !== transactionId && !(i.amount === txAmount && i.source === (targetTx.description || targetTx.title)));
+  } else if (txType === "transfer") {
+    // Credit card settlement transfer
+    if (targetAccId === "supermoney" && cc) {
+      cc.usedCredit = (Number(cc.usedCredit) || 0) + txAmount;
+      cc.availableCredit = Math.max(0, (Number(cc.creditLimit || 0) - cc.usedCredit));
+      accounts = accounts.map((a) => {
+        if (a.id === accId || (a.name && accId && a.name.toLowerCase() === accId.toLowerCase())) {
+          const newBal = (Number(a.openingBalance) || 0) + txAmount;
+          restoredAccountName = a.name;
+          restoredBalance = newBal;
+          return { ...a, openingBalance: newBal };
+        }
+        return a;
+      });
+    } else {
+      // Bank to Bank / Cash transfer
+      accounts = accounts.map((a) => {
+        if (a.id === accId) {
+          return { ...a, openingBalance: (Number(a.openingBalance) || 0) + txAmount };
+        }
+        if (a.id === targetAccId) {
+          return { ...a, openingBalance: (Number(a.openingBalance) || 0) - txAmount };
+        }
+        return a;
+      });
+    }
+    expenses = expenses.filter((e) => e.id !== transactionId && !(e.amount === txAmount && e.categoryId === "credit_card_bill"));
+    transfers = transfers.filter((t) => t.id !== transactionId && t.amount !== txAmount);
+  }
+
+  const updatedTransactions = transactions.filter((t) => t.id !== transactionId);
+
+  const payload = {
+    accounts,
+    expenses,
+    incomes,
+    transfers,
+    transactions: updatedTransactions,
+    lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
+    lastBackup: admin.firestore.FieldValue.serverTimestamp(),
+  };
+
+  if (cc) payload.creditCardAccount = cc;
+
+  await userRef.set(payload, { merge: true });
+
+  return {
+    undoneTransaction: targetTx,
+    restoredAccountName,
+    restoredBalance,
+    amount: txAmount,
+    description: targetTx.description || targetTx.title || "Transaction",
+  };
+}
+
+/**
+ * Undo the most recent transaction
+ */
+async function undoLastTransaction(userId) {
+  const userData = await getUserData(userId);
+  if (!userData) throw new Error("User profile not found.");
+
+  const transactions = userData.transactions || [];
+  if (transactions.length === 0) {
+    throw new Error("No recent transactions found to undo.");
+  }
+
+  // Get the latest transaction (last in array or latest date)
+  const lastTx = transactions[transactions.length - 1];
+  return await deleteTransactionById(userId, lastTx.id);
+}
+
+/**
+ * Edit / Modify the latest transaction (amount, account, category)
+ */
+async function editLastTransaction(userId, { amount, account, category, description }) {
+  const userData = await getUserData(userId);
+  if (!userData) throw new Error("User profile not found.");
+
+  const transactions = userData.transactions || [];
+  if (transactions.length === 0) {
+    throw new Error("No recent transactions found to edit.");
+  }
+
+  const lastTx = transactions[transactions.length - 1];
+  
+  // 1. Undo the previous transaction
+  await deleteTransactionById(userId, lastTx.id);
+
+  // 2. Re-log with modified parameters
+  const newAmount = amount !== undefined && !isNaN(Number(amount)) ? Number(amount) : Number(lastTx.amount);
+  const newAccount = account || lastTx.accountId;
+  const newCategory = category || lastTx.categoryOrSource || lastTx.categoryId || "General";
+  const newDescription = description || lastTx.description || lastTx.title || newCategory;
+
+  const txType = (lastTx.type || "expense").toLowerCase();
+
+  if (txType === "expense") {
+    const exp = await logExpense(userId, {
+      amount: newAmount,
+      description: newDescription,
+      category: newCategory,
+      account: newAccount,
+    });
+    return {
+      id: exp.id,
+      amount: newAmount,
+      account: exp.accountId,
+      category: exp.categoryId,
+      description: exp.description,
+      type: "expense",
+    };
+  } else if (txType === "income") {
+    const inc = await logIncome(userId, {
+      amount: newAmount,
+      source: newDescription,
+      account: newAccount,
+    });
+    return {
+      id: inc.id,
+      amount: newAmount,
+      account: inc.accountId,
+      category: "Income",
+      description: inc.source,
+      type: "income",
+    };
+  } else if (txType === "transfer" && lastTx.targetAccountId === "supermoney") {
+    const ccRes = await payCreditCardBill(userId, {
+      amount: newAmount,
+      accountName: newAccount,
+    });
+    return {
+      amount: newAmount,
+      account: ccRes.fromAccountName,
+      description: "Credit Card Bill Payment",
+      type: "transfer",
+    };
+  } else {
+    // Standard expense fallback
+    const exp = await logExpense(userId, {
+      amount: newAmount,
+      description: newDescription,
+      category: newCategory,
+      account: newAccount,
+    });
+    return {
+      id: exp.id,
+      amount: newAmount,
+      account: exp.accountId,
+      category: exp.categoryId,
+      description: exp.description,
+      type: "expense",
+    };
+  }
+}
+
+/**
+ * Get recent transactions for review and editing
+ */
+async function getRecentTransactions(userId, limit = 5) {
+  const userData = await getUserData(userId);
+  if (!userData) return [];
+
+  const transactions = (userData.transactions || []).slice(-limit).reverse();
+  return transactions;
+}
+
 module.exports = {
   initializeFirebase,
   getUserIdByChatId,
@@ -1105,4 +1518,10 @@ module.exports = {
   getSummary,
   addAccount,
   logTransfer,
-}
+  resolveCategoryAndAccount,
+  setAccountBalance,
+  undoLastTransaction,
+  deleteTransactionById,
+  editLastTransaction,
+  getRecentTransactions,
+};

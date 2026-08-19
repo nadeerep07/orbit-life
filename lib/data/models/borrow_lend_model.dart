@@ -103,12 +103,15 @@ class BorrowLendModel extends HiveObject {
   }
 
   factory BorrowLendModel.fromJson(Map<String, dynamic> json) {
+    final rawType = (json['type'] as String?)?.toLowerCase() ?? 'lent';
+    final normalizedType = (rawType == 'lend' || rawType == 'lent') ? 'lent' : 'borrowed';
+
     return BorrowLendModel(
       id: (json['id'] as String?) ?? '',
       personName: (json['personName'] as String?) ?? (json['to'] as String?) ?? 'Friend',
       phoneNumber: (json['phoneNumber'] as String?) ?? (json['contact'] as String?) ?? '',
       amount: ((json['amount'] ?? 0) as num).toDouble(),
-      type: (json['type'] as String?) ?? 'lend',
+      type: normalizedType,
       date: json['date'] != null ? DateTime.parse(json['date'] as String) : DateTime.now(),
       dueDate: json['dueDate'] != null ? DateTime.parse(json['dueDate'] as String) : null,
       note: (json['note'] as String?) ?? (json['notes'] as String?) ?? '',

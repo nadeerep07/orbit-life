@@ -52,12 +52,13 @@ Analyze the user's message and categorize it into one of the following intents:
    - amount: number (optional)
    - account: string (optional)
 
-4. "DEBT_UPDATE": The user lent/borrowed money or received/paid back a debt (e.g. "Shamveel paid back 5000", "Lent 2000 to Rahul", "Settled debt with Shamveel", "Borrowed 3000 from Dad").
+4. "DEBT_UPDATE": The user lent/borrowed money or received/paid back a debt (e.g. "Friend paid 2500", "Friend paid remaining 2500 to SBI", "Friend repaid 2500", "Shamveel paid back 5000", "Lent 2000 to Rahul", "Settled debt with Friend", "Borrowed 3000 from Dad", "He paid 2500 back to SBI").
    Extract:
-   - action: "settle" (for repayments/paybacks) | "new" (for new lend/borrow)
-   - type: "lend" | "borrow"
-   - personName: string
+   - action: "settle" (for repayments/paybacks/received back) | "new" (for new lend/borrow)
+   - type: "lend" (when someone is paying you back money they owed you, or you lent money) | "borrow" (when you borrowed or are repaying money you borrowed)
+   - personName: string (e.g. "Friend", "Rahul", "Shamveel")
    - amount: number
+   - account: string (optional bank account where money was received or paid from, e.g. "SBI", "HDFC", "Cash")
    - contact: string (optional phone number)
 
 5. "PAY_CARD_BILL": The user paid their credit card bill (e.g. "Paid 10000 credit card bill", "Cleared Supermoney bill 5000 from HDFC").
@@ -105,15 +106,31 @@ Analyze the user's message and categorize it into one of the following intents:
    - borrowLends: array of { to: string, contact: string, amount: number, date: string, type: "lent" | "borrowed" }
    - goals: array of { name: string, targetAmount: number }
 
-11. "QUERY": User asking for balances, stats, analytics, or questions (e.g. "Show balance", "How much did I spend?", "Show my EMIs", "Analytics").
+11. "SET_BALANCE": The user wants to adjust, set, or correct an account's live balance (e.g. "Set SBI balance to 3312", "Update HDFC balance to 1500", "My SBI balance is actually 500", "Change Cash balance to 350", "Fix SBI balance to 391.67").
+   Extract:
+   - accountName: string (e.g. "SBI", "HDFC", "Cash")
+   - balance: number (the actual correct balance)
+
+12. "UNDO": The user wants to cancel, undo, or delete the last logged transaction, expense, income, or payment (e.g. "Undo last transaction", "Undo last expense", "Delete last payment", "Remove last entry", "Cancel that").
+   Extract:
+   - target: "last" | "expense" | "income" | "transfer"
+
+13. "EDIT_TRANSACTION": The user wants to modify details of the last transaction or an expense (e.g. "Change last expense amount to 250", "Change last transaction to HDFC", "Change last category to Food", "It was 350 not 500").
+   Extract:
+   - amount: number (optional)
+   - account: string (optional)
+   - category: string (optional)
+   - description: string (optional)
+
+14. "QUERY": User asking for balances, stats, analytics, or questions (e.g. "Show balance", "How much did I spend?", "Show my EMIs", "Analytics").
    Extract:
    - queryType: "balance" | "emis" | "debts" | "card" | "analytics" | "general"
 
-12. "UNKNOWN": Cannot determine intent.
+15. "UNKNOWN": Cannot determine intent.
 
 Respond STRICTLY with valid JSON matching this schema:
 {
-  "intent": "EXPENSE" | "INCOME" | "PAY_EMI" | "DEBT_UPDATE" | "PAY_CARD_BILL" | "TRANSFER" | "ADD_ACCOUNT" | "MEAL" | "MILEAGE" | "ONBOARDING" | "QUERY" | "UNKNOWN",
+  "intent": "EXPENSE" | "INCOME" | "PAY_EMI" | "DEBT_UPDATE" | "PAY_CARD_BILL" | "TRANSFER" | "ADD_ACCOUNT" | "SET_BALANCE" | "UNDO" | "EDIT_TRANSACTION" | "MEAL" | "MILEAGE" | "ONBOARDING" | "QUERY" | "UNKNOWN",
   "confidence": number,
   "data": { ... },
   "explanation": "Short friendly summary of what was understood"
