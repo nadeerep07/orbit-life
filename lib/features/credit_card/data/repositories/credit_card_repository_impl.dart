@@ -10,7 +10,6 @@ import '../datasources/credit_card_local_data_source.dart';
 import '../models/credit_card_account_model.dart';
 import '../models/fd_lot_model.dart';
 import '../models/credit_card_statement_model.dart';
-import '../models/cashback_transaction_model.dart';
 
 class CreditCardRepositoryImpl implements CreditCardRepository {
   final CreditCardLocalDataSource localDataSource;
