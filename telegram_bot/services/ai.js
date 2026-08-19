@@ -171,15 +171,30 @@ Analyze the user's message and categorize it into one of the following intents:
 
 23. "ALERTS": The user asks to see active risks, warnings, or alerts (e.g. "Show alerts", "Any financial warnings?", "Check risks").
 
-24. "QUERY": User asking for balances, stats, analytics, or simple questions (e.g. "Show balance", "How much did I spend?", "Show my EMIs", "Analytics").
+24. "PAYMENT_ADVICE": The user asks how they should pay for something (e.g. "Should I pay 3500 using UPI or Supermoney card?", "How should I pay for this?", "Best payment method for 2000").
+   Extract:
+   - amount: number
+   - merchant: string (optional)
+
+25. "WEALTH_PROJECTION": The user asks about their net worth timeline, wealth milestones, or compound interest (e.g. "When will I reach 1 Lakh net worth?", "Show my wealth milestone timeline", "Net worth forecast in 1 year").
+   Extract:
+   - targetAmount: number (optional)
+
+26. "MONEY_LEAKS": The user asks about impulse spending, spending leaks, or food delivery spikes (e.g. "Where is my money leaking?", "Show impulse spending", "Money leaks", "Check food delivery spending").
+
+27. "EXPORT_STATEMENT": The user asks for a monthly financial statement export or report (e.g. "Send monthly statement", "Export August statement", "Download statement").
+   Extract:
+   - month: string (optional "YYYY-MM")
+
+28. "QUERY": User asking for balances, stats, analytics, or simple questions (e.g. "Show balance", "How much did I spend?", "Show my EMIs", "Analytics").
    Extract:
    - queryType: "balance" | "emis" | "debts" | "card" | "analytics" | "general"
 
-25. "UNKNOWN": Cannot determine intent.
+29. "UNKNOWN": Cannot determine intent.
 
 Respond STRICTLY with valid JSON matching this schema:
 {
-  "intent": "EXPENSE" | "INCOME" | "PAY_EMI" | "DEBT_UPDATE" | "PAY_CARD_BILL" | "TRANSFER" | "ADD_ACCOUNT" | "SET_BALANCE" | "UNDO" | "EDIT_TRANSACTION" | "CAN_I_AFFORD" | "WHAT_IF" | "SAFE_TO_SPEND" | "CASH_FLOW_FORECAST" | "DAILY_BRIEFING" | "WEEKLY_REVIEW" | "FINANCIAL_HEALTH" | "SET_PREFERENCE" | "SET_GOAL" | "ALERTS" | "MEAL" | "MILEAGE" | "ONBOARDING" | "QUERY" | "UNKNOWN",
+  "intent": "EXPENSE" | "INCOME" | "PAY_EMI" | "DEBT_UPDATE" | "PAY_CARD_BILL" | "TRANSFER" | "ADD_ACCOUNT" | "SET_BALANCE" | "UNDO" | "EDIT_TRANSACTION" | "CAN_I_AFFORD" | "WHAT_IF" | "SAFE_TO_SPEND" | "CASH_FLOW_FORECAST" | "DAILY_BRIEFING" | "WEEKLY_REVIEW" | "FINANCIAL_HEALTH" | "SET_PREFERENCE" | "SET_GOAL" | "ALERTS" | "PAYMENT_ADVICE" | "WEALTH_PROJECTION" | "MONEY_LEAKS" | "EXPORT_STATEMENT" | "MEAL" | "MILEAGE" | "ONBOARDING" | "QUERY" | "UNKNOWN",
   "confidence": number,
   "data": { ... },
   "explanation": "Short friendly summary of what was understood"
