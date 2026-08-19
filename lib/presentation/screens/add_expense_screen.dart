@@ -205,7 +205,7 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
 
             // ── Category Dropdown ─────────────────────────────────────────────
             DropdownButtonFormField<String>(
-              value: _selectedCategory,
+              initialValue: _selectedCategory,
               decoration: InputDecoration(
                 labelText: 'Category',
                 prefixIcon: const Icon(Icons.category_rounded, size: 20),
@@ -229,7 +229,7 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
 
             // ── Payment Method Dropdown ───────────────────────────────────────
             DropdownButtonFormField<String>(
-              value: _selectedAccount,
+              initialValue: _selectedAccount,
               decoration: InputDecoration(
                 labelText: 'Payment Method',
                 prefixIcon: const Icon(Icons.account_balance_wallet_rounded, size: 20),
