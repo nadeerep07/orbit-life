@@ -44,8 +44,11 @@ class _BorrowLendScreenState extends State<BorrowLendScreen>
     double totalBorrowed = 0;
     for (var e in viewModel.entries) {
       if (e.status == 'pending') {
-        if (e.type == 'lent' || e.type == 'lend') totalLent += e.amount;
-        else totalBorrowed += e.amount;
+        if (e.type == 'lent' || e.type == 'lend') {
+          totalLent += e.amount;
+        } else {
+          totalBorrowed += e.amount;
+        }
       }
     }
 
