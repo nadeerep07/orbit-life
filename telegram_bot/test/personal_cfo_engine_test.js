@@ -96,14 +96,26 @@ assert.strictEqual(sim.current.liquidMoney, 17000, "Original data untouched");
 assert.strictEqual(sim.simulated.liquidMoney, 12000, "Simulated liquid should be reduced by 5000");
 console.log(`   ✅ What-If Spend ₹5,000: Diff = ₹${sim.impact.dailyDiff}/day`);
 
-// 3B: Critical Low-Balance Simulation (User's Exact Scenario)
+// 3B: Critical Low-Balance Simulation (This Month)
 const lowBalanceUserData = {
   ...mockUserData,
   accounts: [{ id: "sbi", name: "SBI Savings", openingBalance: 1663.36 }],
 };
-const simCritical = simulateScenario(lowBalanceUserData, { type: "SPEND", amount: 1299, name: "Earphones" });
-assert.ok(simCritical.recommendation.includes("NOT RECOMMENDED") || simCritical.recommendation.includes("CRITICAL"), "Low balance spend must NOT return safe to proceed!");
-console.log(`   ✅ Critical Low Balance Simulation: ${simCritical.recommendation}`);
+const simCritical = simulateScenario(lowBalanceUserData, { type: "SPEND", amount: 1299, name: "Earphones", timing: "CURRENT_MONTH" });
+assert.ok(simCritical.recommendation.includes("NOT RECOMMENDED") || simCritical.recommendation.includes("CRITICAL"), "Low balance spend this month must NOT return safe to proceed!");
+console.log(`   ✅ Critical Low Balance (This Month): ${simCritical.recommendation}`);
+
+// 3C: Next Month Simulation (User's Exact Scenario — Earphones next month)
+const simNextMonth = simulateScenario(lowBalanceUserData, { type: "SPEND", amount: 1299, name: "Bluetooth Earphones", timing: "NEXT_MONTH" });
+assert.ok(simNextMonth.recommendation.includes("RECOMMENDED"), "Next month spend with expected salary must be RECOMMENDED!");
+assert.ok(simNextMonth.simulated.discretionary > 5000, "Next month discretionary surplus should be > 5,000");
+console.log(`   ✅ Next Month Earphones Simulation: ${simNextMonth.recommendation}`);
+
+// 3D: Next Month Can I Afford Test
+const affNextMonth = canIAfford(lowBalanceUserData, { amount: 1299, itemName: "Bluetooth Earphones", timing: "NEXT_MONTH" });
+assert.strictEqual(affNextMonth.isAffordable, true, "Next month earphones must be affordable");
+assert.ok(affNextMonth.verdict.includes("RECOMMENDED"), "Next month verdict must be RECOMMENDED");
+console.log(`   ✅ Next Month Can I Afford: ${affNextMonth.verdictTitle} — ${affNextMonth.recommendation}`);
 
 // 4. Cash Flow Forecast Tests
 console.log("🔹 4. Testing generate30DayForecast...");
