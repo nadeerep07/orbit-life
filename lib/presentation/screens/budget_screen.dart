@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../theme/app_theme.dart';
 import '../viewmodels/budget_view_model.dart';
 import '../viewmodels/expense_view_model.dart';
 import '../viewmodels/month_view_model.dart';
