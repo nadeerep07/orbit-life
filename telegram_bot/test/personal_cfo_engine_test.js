@@ -163,9 +163,51 @@ console.log(`   ✅ Evaluated Alerts: ${alerts.length} active alerts found`);
 console.log("🔹 10. Testing acquireIdempotencyLock...");
 const lockKey = "msg_test_12345";
 const lock1 = acquireIdempotencyLock(lockKey, 5000);
-assert.strictEqual(lock1, true, "First lock attempt must succeed");
 const lock2 = acquireIdempotencyLock(lockKey, 5000);
-assert.strictEqual(lock2, false, "Duplicate lock attempt must be rejected");
-console.log("   ✅ Idempotency Guard successfully blocked duplicate request!");
+assert.strictEqual(lock1, true, "First request acquires lock");
+assert.strictEqual(lock2, false, "Duplicate request within TTL must be blocked");
+console.log(`   ✅ Idempotency Guard successfully blocked duplicate request!`);
 
-console.log("\n🎉 ALL 10 ORBITLIFE PERSONAL CFO SUITE TESTS PASSED WITH 100% SUCCESS!\n");
+// 11. Bank SMS & UPI Auto-Parsing Tests
+const { parseBankSms } = require("../services/sms_parser");
+console.log("🔹 11. Testing parseBankSms...");
+const sms1 = parseBankSms("Dear SBI User, your A/c ending 1234 is debited by Rs.450.00 on 19-AUG-26 at SWIGGY. Avail Bal: Rs 3,420.50");
+assert.strictEqual(sms1.isBankSms, true);
+assert.strictEqual(sms1.amount, 450);
+assert.strictEqual(sms1.account, "SBI");
+assert.strictEqual(sms1.category, "Food");
+assert.strictEqual(sms1.balanceAfter, 3420.5);
+console.log(`   ✅ SMS Auto-Parsed: ₹${sms1.amount} at ${sms1.merchant} (${sms1.account}) — Category: ${sms1.category}`);
+
+// 12. Smart Money Leak & Impulse Detector Tests
+const { detectMoneyLeaks } = require("../services/leak_detector");
+console.log("🔹 12. Testing detectMoneyLeaks...");
+const leaks = detectMoneyLeaks(mockUserData);
+assert.ok(leaks.overallLeakScore >= 0);
+console.log(`   ✅ Leak Detector: ${leaks.leakCount} leaks found, Status: ${leaks.status}`);
+
+// 13. Net Worth Trajectory & Wealth Milestones Tests
+const { calculateWealthTrajectory } = require("../services/wealth_engine");
+console.log("🔹 13. Testing calculateWealthTrajectory...");
+const wealth = calculateWealthTrajectory(mockUserData);
+assert.ok(wealth.currentNetWorth > 0);
+assert.ok(wealth.projections.in1Year > wealth.currentNetWorth, "1 Year net worth should compound higher");
+assert.strictEqual(wealth.milestones.length, 5, "Should evaluate 5 wealth milestones");
+console.log(`   ✅ Wealth Engine: Net Worth ₹${wealth.currentNetWorth} ➔ 1-Yr ₹${wealth.projections.in1Year}, 1-Lakh Target: ${wealth.milestones[1].estimatedDate}`);
+
+// 14. Smart Payment Method Advisor Tests
+const { recommendPaymentMethod } = require("../services/payment_advisor");
+console.log("🔹 14. Testing recommendPaymentMethod...");
+const paymentRec = recommendPaymentMethod(mockUserData, 3500, "Electronics");
+assert.ok(paymentRec.recommendedMode.length > 0);
+console.log(`   ✅ Payment Advisor: ₹3,500 ➔ ${paymentRec.recommendedMode} (${paymentRec.reason})`);
+
+// 15. Financial Statement & Export Tests
+const { generateMonthlyStatement } = require("../services/export_engine");
+console.log("🔹 15. Testing generateMonthlyStatement...");
+const statement = generateMonthlyStatement(mockUserData, new Date().toISOString().substring(0, 7));
+assert.ok(statement.reportText.includes("ORBITLIFE MONTHLY FINANCIAL STATEMENT"));
+assert.ok(statement.totalSpent >= 0);
+console.log(`   ✅ Export Engine: Generated statement for ${statement.period} (${statement.reportText.length} chars)`);
+
+console.log("\n🎉 ALL 15 ORBITLIFE PERSONAL CFO ADVANCED SUITE TESTS PASSED WITH 100% SUCCESS!\n");
