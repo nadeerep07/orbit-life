@@ -257,7 +257,7 @@ class _AddBorrowLendScreenState extends State<AddBorrowLendScreen> {
                         filled: true,
                         fillColor: Colors.transparent,
                       ),
-                      value: _selectedAccountId,
+                      initialValue: _selectedAccountId,
                       items: accounts.map((acc) => DropdownMenuItem(
                         value: acc.id,
                         child: Text(acc.name),
