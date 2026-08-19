@@ -339,7 +339,7 @@ class SavingsScreen extends StatelessWidget {
                       ),
                     ),
                     isExpanded: true, // ← Fixes the overflow
-                    value: selectedAccountId,
+                    initialValue: selectedAccountId,
                     items: accountsVM.accounts.map((a) {
                       return DropdownMenuItem(
                         value: a.id,
